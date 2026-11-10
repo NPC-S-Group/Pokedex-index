@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # Trabajo obligatorio del enunciado: runner de GitHub (ubuntu-latest).
+  tests:
+    runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: clave-solo-para-ci     # clave de pruebas, nunca la real
+      DATABASE_URL: sqlite:///./test.db
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+      - name: Ejecutar tests con cobertura
+        run: pytest --cov=app --cov-report=term-missing --cov-fail-under=80
+
+  # Extra: construye la imagen Docker y comprueba que la API arranca,
+  # en el runner propio del homelab. Solo corre si la variable de la
+  # organizacion HOMELAB_RUNNER vale "true"; si el runner se apaga,
+  # se cambia a "false" y el trabajo se salta (el CI sigue en verde).
+  docker:
+    needs: tests
+    if: vars.HOMELAB_RUNNER == 'true'
+    runs-on: [self-hosted, homelab]
+    timeout-minutes: 15
+    env:
+      IMAGEN: pokedex-api:ci-${{ github.run_id }}
+      CONTENEDOR: pokedex-ci-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir la imagen
+        run: docker build -t "$IMAGEN" .
+      - name: Arrancar la API en un contenedor
+        run: |
+          docker run -d --name "$CONTENEDOR" \
+            -e SECRET_KEY=clave-solo-para-ci \
+            -e DATABASE_URL=sqlite:///./ci.db \
+            -p 127.0.0.1::8000 "$IMAGEN"
+      - name: Comprobar /health y /docs
+        run: |
+          PUERTO=$(docker port "$CONTENEDOR" 8000/tcp | head -1 | cut -d: -f2)
+          for i in $(seq 1 30); do
+            curl -fsS "http://127.0.0.1:$PUERTO/health" && break
+            sleep 1
+          done
+          curl -fsS "http://127.0.0.1:$PUERTO/health"
+          curl -fsS -o /dev/null "http://127.0.0.1:$PUERTO/docs"
+          echo "API arrancada y respondiendo en Docker"
+      - name: Logs del contenedor si algo falla
+        if: failure()
+        run: docker logs "$CONTENEDOR" || true
+      - name: Limpiar
+        if: always()
+        run: |
+          docker rm -f "$CONTENEDOR" || true
+          docker rmi "$IMAGEN" || true
