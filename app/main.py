@@ -15,6 +15,7 @@ from app import models  # noqa: F401
 from app.config import settings
 from app.database import create_db_and_tables
 from app.limits import limiter
+from app.routers import auth, pokedex, pokemon
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s · %(message)s"
@@ -65,9 +66,8 @@ async def registrar_peticiones(request: Request, call_next):
     return respuesta
 
 
-# Cada rama features/ registra aquí su router, por ejemplo:
-#   from app.routers import auth
-#   app.include_router(auth.router, prefix="/api/v1")
+for modulo in (auth, pokemon, pokedex):
+    app.include_router(modulo.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["sistema"])
