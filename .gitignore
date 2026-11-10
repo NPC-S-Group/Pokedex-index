@@ -1,0 +1,29 @@
+# Secretos: nunca se suben
+.env
+.env.*
+!.env.example
+
+# Entornos virtuales
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Bases de datos locales
+*.db
+*.sqlite3
+
+# Cobertura
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Editores y sistema
+.vscode/
+.idea/
+.DS_Store
