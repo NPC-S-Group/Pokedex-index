@@ -9,14 +9,14 @@ from sqlmodel import or_, select
 
 from app.auth import create_access_token, hash_password, verify_password
 from app.dependencies import SessionDep
-from app.limits import limiter
+from app.limits import LIMITE_LOGIN, LIMITE_REGISTRO, limiter
 from app.models import User, UserCreate, UserRead
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
-@limiter.limit("5/hour")
+@limiter.limit(LIMITE_REGISTRO)
 def registrar(request: Request, datos: UserCreate, session: SessionDep):
     repetido = session.exec(
         select(User).where(
@@ -47,7 +47,7 @@ def registrar(request: Request, datos: UserCreate, session: SessionDep):
 
 
 @router.post("/login")
-@limiter.limit("10/minute")
+@limiter.limit(LIMITE_LOGIN)
 def login(
     request: Request,
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
