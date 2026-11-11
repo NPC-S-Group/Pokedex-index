@@ -66,15 +66,20 @@ def _claro(color: tuple[int, int, int]) -> bool:
 
 
 def generar_ficha(pokemon: dict, imagen: bytes | None = None) -> bytes:
-    tipos = pokemon.get("types") or []
-    color = (
-        COLORES_TIPO.get(tipos[0], COLOR_POR_DEFECTO) if tipos else COLOR_POR_DEFECTO
-    )
-
     pdf = FPDF(format=(ANCHO, ALTO))
     pdf.set_auto_page_break(False)
     pdf.set_title(_texto(f"Ficha de {_bonito(pokemon['name'])}"))
     pdf.set_creator("Pokédex API")
+    dibujar_ficha(pdf, pokemon, imagen)
+    return bytes(pdf.output())
+
+
+def dibujar_ficha(pdf: FPDF, pokemon: dict, imagen: bytes | None = None) -> None:
+    """Añade al PDF una página A5 con la ficha (la reutiliza el export de equipos)."""
+    tipos = pokemon.get("types") or []
+    color = (
+        COLORES_TIPO.get(tipos[0], COLOR_POR_DEFECTO) if tipos else COLOR_POR_DEFECTO
+    )
     pdf.add_page()
 
     # ── Cabecera con el color del primer tipo ──
@@ -197,5 +202,3 @@ def generar_ficha(pokemon: dict, imagen: bytes | None = None) -> bytes:
     pdf.set_font("Helvetica", "I", 7.5)
     pdf.set_text_color(140, 140, 140)
     pdf.cell(0, 5, _texto("Datos de PokeAPI (pokeapi.co) · Pokédex API"), align="C")
-
-    return bytes(pdf.output())
