@@ -21,7 +21,7 @@ El CI exige **cobertura ≥ 80 %**. El enunciado pide **mínimo 15 tests**.
 
 **Avance (10 nov):** 25 tests y 81 % de cobertura.  
 **Avance (11 nov):** tests de auth (#4) y del CRUD de la Pokédex (#7): 149 tests y 99 % de cobertura.  
-**Avance (11 nov, tarde):** con búsqueda y ficha PDF (#8) y equipo en PDF (#13):  tests y 99 % de cobertura.
+**Avance (11 nov, tarde):** con búsqueda y ficha PDF (#8) y equipo en PDF (#13): 194 tests y 99 % de cobertura.
 
 ## Fixtures de `conftest.py`
 | Fixture | Para qué |
