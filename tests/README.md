@@ -18,7 +18,8 @@ El CI exige **cobertura ≥ 80 %**. El enunciado pide **mínimo 15 tests**.
 | `test_logging.py` | Logging de peticiones, auth, 422 y 429; que no se filtren contraseñas ni tokens | 22 | #10 Henar |
 
 **Avance (10 nov):** 25 tests y 81 % de cobertura.  
-**Avance (11 nov):** 78 tests y 90 % de cobertura.
+**Avance (11 nov):** 78 tests y 90 % de cobertura.  
+**Avance (11 nov, tarde):** tests de auth (#4, PR #28) y del CRUD de la Pokédex (#7, PR #29): 149 tests y 99 % de cobertura al integrar los dos.
 
 ## Fixtures de `conftest.py`
 | Fixture | Para qué |
