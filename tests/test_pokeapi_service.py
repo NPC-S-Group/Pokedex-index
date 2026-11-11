@@ -13,13 +13,27 @@ BASE = "https://pokeapi.test/api/v2"
 PIKACHU = {
     "id": 25,
     "name": "pikachu",
-    "sprites": {"front_default": "https://sprites.test/25.png"},
+    "height": 4,
+    "weight": 60,
+    "sprites": {
+        "front_default": "https://sprites.test/25.png",
+        "back_default": "https://sprites.test/back/25.png",
+        "front_shiny": None,
+        "other": {
+            "official-artwork": {"front_default": "https://sprites.test/art/25.png"}
+        },
+    },
+    "abilities": [
+        {"ability": {"name": "static"}, "is_hidden": False, "slot": 1},
+        {"ability": {"name": "lightning-rod"}, "is_hidden": True, "slot": 3},
+    ],
     "types": [{"slot": 1, "type": {"name": "electric", "url": "..."}}],
     "stats": [
         {"base_stat": 35, "stat": {"name": "hp"}},
         {"base_stat": 55, "stat": {"name": "attack"}},
         {"base_stat": 40, "stat": {"name": "defense"}},
         {"base_stat": 50, "stat": {"name": "special-attack"}},
+        {"base_stat": 50, "stat": {"name": "special-defense"}},
         {"base_stat": 90, "stat": {"name": "speed"}},
     ],
 }
@@ -69,8 +83,27 @@ async def test_simplifica_la_respuesta():
         "id": 25,
         "name": "pikachu",
         "sprite": "https://sprites.test/25.png",
+        "sprites": {
+            "front_default": "https://sprites.test/25.png",
+            "back_default": "https://sprites.test/back/25.png",
+            "front_shiny": None,
+            "official_artwork": "https://sprites.test/art/25.png",
+        },
         "types": ["electric"],
-        "stats": {"hp": 35, "attack": 55, "defense": 40, "speed": 90},
+        "height_m": 0.4,
+        "weight_kg": 6.0,
+        "abilities": [
+            {"name": "static", "is_hidden": False},
+            {"name": "lightning-rod", "is_hidden": True},
+        ],
+        "stats": {
+            "hp": 35,
+            "attack": 55,
+            "defense": 40,
+            "special_attack": 50,
+            "special_defense": 50,
+            "speed": 90,
+        },
     }
 
 
@@ -103,12 +136,10 @@ async def test_sin_sprite_ni_stats_no_rompe():
     datos = await servicio(responde(json=bruto)).get_pokemon(10001)
     assert datos["sprite"] is None
     assert datos["types"] == []
-    assert datos["stats"] == {
-        "hp": None,
-        "attack": None,
-        "defense": None,
-        "speed": None,
-    }
+    assert datos["abilities"] == []
+    assert datos["height_m"] is None and datos["weight_kg"] is None
+    assert datos["sprites"]["official_artwork"] is None
+    assert set(datos["stats"].values()) == {None}
 
 
 # --- Errores de la PokeAPI ----------------------------------------------------
