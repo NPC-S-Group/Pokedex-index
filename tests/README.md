@@ -11,6 +11,7 @@ El CI exige **cobertura ≥ 80 %**. El enunciado pide **mínimo 15 tests**.
 | `conftest.py` | Fixtures comunes (no son tests) | — | Jorge |
 | `test_health.py` | `/health` y `/docs` | 2 | #3 |
 | `test_teams.py` | Equipos: límites, propiedad, PUT y borrado | 15 | #6 |
+| `test_teams_export.py` | Equipo en PDF: páginas, cabeceras, propiedad, imágenes y estadísticas combinadas | 8 | #13 |
 | `test_rate_limit_cors.py` | 429 de cada nivel y CORS | 8 | #9 |
 | `test_auth.py` | Registro, login y token | ❌ falta | #4 Miguel |
 | `test_pokedex.py` | CRUD, filtros y propiedad | ❌ falta | #7 Miguel |
@@ -19,7 +20,8 @@ El CI exige **cobertura ≥ 80 %**. El enunciado pide **mínimo 15 tests**.
 | `test_logging.py` | Logging de peticiones, auth, 422 y 429; que no se filtren contraseñas ni tokens | 22 | #10 Henar |
 
 **Avance (10 nov):** 25 tests y 81 % de cobertura.  
-**Avance (11 nov):** 115 tests y 93 % de cobertura.
+**Avance (11 nov):** 115 tests y 93 % de cobertura.  
+**Avance (11 nov, tarde):** 123 tests y 94 % de cobertura (con #8 y #13).
 
 ## Fixtures de `conftest.py`
 | Fixture | Para qué |

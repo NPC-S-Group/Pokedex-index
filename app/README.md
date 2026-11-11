@@ -25,7 +25,7 @@ petición → logging → rate limiting → CORS → endpoint (router)
 
 ## Avance
 - **10 nov:** base del hito 4 (#2), resto de archivos iniciales, equipos (#6) y rate limiting con CORS (#9).
-- **11 nov:** cliente de PokeAPI (#5) y logging completo (#10).
+- **11 nov:** cliente de PokeAPI (#5) y logging completo (#10), de Henar; búsqueda y ficha PDF (#8, Henar); equipo en PDF (#13, Jorge).
 - **Pendiente:** API v2 (#14).
 
 Leyenda: ✅ hecho · 🟡 a medias · ❌ falta
