@@ -2,11 +2,12 @@
 
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import func, select
 
 from app.dependencies import CurrentUser, ServicioPokeAPI, SessionDep
+from app.limits import LIMITE_AUTENTICADO, LIMITE_POKEAPI, limiter
 from app.models import (
     PokedexEntry,
     PokedexEntryCreate,
@@ -27,7 +28,9 @@ ORDENABLE = {
 
 
 @router.post("", response_model=PokedexEntryRead, status_code=status.HTTP_201_CREATED)
+@limiter.limit(LIMITE_POKEAPI)  # consulta la PokeAPI para validar el id
 async def anadir(
+    request: Request,
     datos: PokedexEntryCreate,
     usuario: CurrentUser,
     session: SessionDep,
@@ -61,7 +64,9 @@ async def anadir(
 
 
 @router.get("", response_model=list[PokedexEntryRead])
+@limiter.limit(LIMITE_AUTENTICADO)
 def listar(
+    request: Request,
     usuario: CurrentUser,
     session: SessionDep,
     captured: bool | None = None,
@@ -90,7 +95,8 @@ def _contar(session, *condiciones) -> int:
 
 # /stats va ANTES que /{entry_id}: si no, FastAPI intentaría leer "stats" como un id.
 @router.get("/stats")
-def estadisticas(usuario: CurrentUser, session: SessionDep):
+@limiter.limit(LIMITE_AUTENTICADO)
+def estadisticas(request: Request, usuario: CurrentUser, session: SessionDep):
     mias = PokedexEntry.owner_id == usuario.id
     total = _contar(session, mias)
     capturados = _contar(session, mias, PokedexEntry.is_captured)
@@ -113,12 +119,15 @@ def _entrada_propia(session, entry_id: int, usuario) -> PokedexEntry:
 
 
 @router.get("/{entry_id}", response_model=PokedexEntryRead)
-def detalle(entry_id: int, usuario: CurrentUser, session: SessionDep):
+@limiter.limit(LIMITE_AUTENTICADO)
+def detalle(request: Request, entry_id: int, usuario: CurrentUser, session: SessionDep):
     return _entrada_propia(session, entry_id, usuario)
 
 
 @router.patch("/{entry_id}", response_model=PokedexEntryRead)
+@limiter.limit(LIMITE_AUTENTICADO)
 def actualizar(
+    request: Request,
     entry_id: int, datos: PokedexEntryUpdate, usuario: CurrentUser, session: SessionDep
 ):
     entrada = _entrada_propia(session, entry_id, usuario)
@@ -137,7 +146,8 @@ def actualizar(
 
 
 @router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
-def borrar(entry_id: int, usuario: CurrentUser, session: SessionDep):
+@limiter.limit(LIMITE_AUTENTICADO)
+def borrar(request: Request, entry_id: int, usuario: CurrentUser, session: SessionDep):
     entrada = _entrada_propia(session, entry_id, usuario)
     # Si estaba en algún equipo, sale también de él: no dejamos miembros huérfanos.
     for miembro in session.exec(

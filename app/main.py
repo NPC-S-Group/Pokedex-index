@@ -41,11 +41,12 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    # PUT hace falta para actualizar equipos desde un navegador.
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
-# @limiter.limit en los endpoints de auth necesita esto para funcionar.
+# Límites por endpoint (@limiter.limit) y por defecto (default_limits) en app/limits.py.
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
@@ -71,5 +72,5 @@ for modulo in (auth, pokemon, pokedex, teams):
 
 
 @app.get("/health", tags=["sistema"])
-def health():
+def health():  # sin límite: la usan los monitores
     return {"status": "ok"}

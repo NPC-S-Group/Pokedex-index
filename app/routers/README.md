@@ -1,0 +1,25 @@
+# `app/routers/` · endpoints
+
+Un archivo por grupo de endpoints. Todos se registran en `main.py` con el prefijo `/api/v1`.
+
+| Archivo | Endpoints | Límite | Estado | Tarea |
+|---|---|---|---|---|
+| `auth.py` | `POST /auth/register`, `POST /auth/login` | 5/h y 10/min | ✅ código · ❌ tests | #4 Miguel |
+| `pokemon.py` | `GET /pokemon/{id_or_name}` | 30/min | 🟡 falta habilidades y sprites completos | #8 Henar |
+| | `GET /pokemon/search`, `GET /pokemon/{id}/card` | 30/min | ❌ | #8 Henar |
+| `pokedex.py` | `POST`, `GET` (filtros, orden y paginación), `GET /{id}`, `PATCH`, `DELETE` | 30/min (POST), 100/min | ✅ código · ❌ tests | #7 Miguel |
+| | `GET /pokedex/stats` | 100/min | 🟡 falta `most_common_type` y `capture_streak_days` | #12 Henar |
+| | `GET /pokedex/export` (CSV/PDF) | | ❌ | #11 Miguel |
+| `teams.py` | `POST`, `GET`, `GET /{id}`, `PUT`, `DELETE` | 100/min | ✅ con tests (100 %) | #6 Jorge |
+| | `GET /teams/{id}/export` (PDF) | | ❌ | #13 Jorge |
+
+## Reglas comunes
+- **Propiedad:** cada usuario solo ve y toca lo suyo. Si algo es de otro, responde **404** (no 403), para no confirmar que existe.
+- **Rate limiting:** cada endpoint lleva `@limiter.limit(...)` y `request: Request` como primer parámetro, porque slowapi lo necesita. No hay límite por defecto: si añades un endpoint, ponle su decorador (ver `app/limits.py`).
+- **Códigos:** 422 = petición mal formada (lo detecta Pydantic); 400 = regla de negocio no cumplida; 409 = duplicado; 401 = sin token o token inválido; 429 = límite superado.
+
+## Equipos (`teams.py`)
+- De 1 a 6 Pokémon, sin repetidos (422), y todos de **tu** Pokédex (400 con la lista de los que faltan).
+- La posición (1–6) sigue el orden de `pokemon_ids`.
+- `PUT` reemplaza el equipo entero. Los miembros antiguos se borran solos (cascada `delete-orphan`).
+- Si borras un Pokémon de la Pokédex, sale de sus equipos.

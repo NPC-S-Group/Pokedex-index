@@ -1,9 +1,10 @@
 """Equipos de batalla: hasta 6 Pokémon de la propia Pokédex."""
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlmodel import select
 
 from app.dependencies import CurrentUser, SessionDep
+from app.limits import LIMITE_AUTENTICADO, limiter
 from app.models import (
     PokedexEntry,
     Team,
@@ -78,7 +79,8 @@ def _equipo_propio(session, team_id: int, usuario) -> Team:
 
 
 @router.post("", response_model=TeamRead, status_code=status.HTTP_201_CREATED)
-def crear(datos: TeamCreate, usuario: CurrentUser, session: SessionDep):
+@limiter.limit(LIMITE_AUTENTICADO)
+def crear(request: Request, datos: TeamCreate, usuario: CurrentUser, session: SessionDep):
     entradas = _entradas_de_la_pokedex(session, usuario, datos.pokemon_ids)
     team = Team(trainer_id=usuario.id, name=datos.name, description=datos.description)
     _poner_miembros(team, entradas)
@@ -89,7 +91,8 @@ def crear(datos: TeamCreate, usuario: CurrentUser, session: SessionDep):
 
 
 @router.get("", response_model=list[TeamRead])
-def listar(usuario: CurrentUser, session: SessionDep):
+@limiter.limit(LIMITE_AUTENTICADO)
+def listar(request: Request, usuario: CurrentUser, session: SessionDep):
     equipos = session.exec(
         select(Team).where(Team.trainer_id == usuario.id).order_by(Team.id)
     ).all()
@@ -97,12 +100,14 @@ def listar(usuario: CurrentUser, session: SessionDep):
 
 
 @router.get("/{team_id}", response_model=TeamRead)
-def detalle(team_id: int, usuario: CurrentUser, session: SessionDep):
+@limiter.limit(LIMITE_AUTENTICADO)
+def detalle(request: Request, team_id: int, usuario: CurrentUser, session: SessionDep):
     return _a_respuesta(session, _equipo_propio(session, team_id, usuario))
 
 
 @router.put("/{team_id}", response_model=TeamRead)
-def actualizar(team_id: int, datos: TeamCreate, usuario: CurrentUser, session: SessionDep):
+@limiter.limit(LIMITE_AUTENTICADO)
+def actualizar(request: Request, team_id: int, datos: TeamCreate, usuario: CurrentUser, session: SessionDep):
     # PUT reemplaza el equipo entero: nombre, descripción y miembros.
     team = _equipo_propio(session, team_id, usuario)
     entradas = _entradas_de_la_pokedex(session, usuario, datos.pokemon_ids)
@@ -116,7 +121,8 @@ def actualizar(team_id: int, datos: TeamCreate, usuario: CurrentUser, session: S
 
 
 @router.delete("/{team_id}", status_code=status.HTTP_204_NO_CONTENT)
-def borrar(team_id: int, usuario: CurrentUser, session: SessionDep):
+@limiter.limit(LIMITE_AUTENTICADO)
+def borrar(request: Request, team_id: int, usuario: CurrentUser, session: SessionDep):
     team = _equipo_propio(session, team_id, usuario)
     session.delete(team)  # los miembros se borran en cascada
     session.commit()
