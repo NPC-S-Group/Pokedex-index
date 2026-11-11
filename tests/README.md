@@ -15,11 +15,13 @@ El CI exige **cobertura ≥ 80 %**. El enunciado pide **mínimo 15 tests**.
 | `test_auth.py` | Registro, login, token y usuario actual | 30 | #4 Miguel |
 | `test_pokedex.py` | CRUD, filtros, orden, paginación y propiedad | 41 | #7 Miguel |
 | `test_pokeapi_service.py` | Servicio con mock: OK, errores, timeouts y logging | 31 | #5 Henar |
+| `test_pokemon.py` | Búsqueda (nombre, tipo, paginación, caché), detalle y ficha PDF, con la PokeAPI simulada | 37 | #8 Henar |
 | `test_logging.py` | Logging de peticiones, auth, 422 y 429; que no se filtren contraseñas ni tokens | 22 | #10 Henar |
 
 **Avance (10 nov):** 25 tests y 81 % de cobertura.  
 **Avance (11 nov):** 78 tests y 90 % de cobertura.  
-**Avance (11 nov, tarde):** tests de auth (#4, PR #28) y del CRUD de la Pokédex (#7, PR #29): 149 tests y 99 % de cobertura al integrar los dos.
+**Avance (11 nov, tarde):** tests de auth (#4, PR #28) y del CRUD de la Pokédex (#7, PR #29): 149 tests y 99 % de cobertura al integrar los dos.  
+**Avance (11 nov, noche):** búsqueda, detalle y ficha PDF (#8, PR #30): 186 tests y 99 % de cobertura.
 
 ## Fixtures de `conftest.py`
 | Fixture | Para qué |
