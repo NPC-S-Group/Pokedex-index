@@ -15,7 +15,7 @@ from app import models  # noqa: F401
 from app.config import settings
 from app.database import create_db_and_tables
 from app.limits import limiter
-from app.routers import auth, pokedex, pokemon
+from app.routers import auth, pokedex, pokemon, teams
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s · %(message)s"
@@ -66,7 +66,7 @@ async def registrar_peticiones(request: Request, call_next):
     return respuesta
 
 
-for modulo in (auth, pokemon, pokedex):
+for modulo in (auth, pokemon, pokedex, teams):
     app.include_router(modulo.router, prefix="/api/v1")
 
 

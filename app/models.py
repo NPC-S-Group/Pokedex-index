@@ -120,3 +120,36 @@ class TeamMember(SQLModel, table=True):
     position: int = Field(ge=1, le=6)
 
     team: Team | None = Relationship(back_populates="members")
+
+
+class TeamBase(SQLModel):
+    name: str = Field(min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
+
+
+class TeamCreate(TeamBase):
+    # Ids de Pokémon (los de la PokeAPI) que ya están en la Pokédex del usuario.
+    pokemon_ids: list[int] = Field(min_length=1, max_length=6)
+
+    @field_validator("pokemon_ids")
+    @classmethod
+    def sin_repetidos(cls, valor: list[int]) -> list[int]:
+        if len(set(valor)) != len(valor):
+            raise ValueError("un Pokémon no puede estar dos veces en el equipo")
+        return valor
+
+
+class TeamMemberRead(SQLModel):
+    position: int
+    pokedex_entry_id: int
+    pokemon_id: int
+    pokemon_name: str
+    nickname: str | None
+    pokemon_sprite: str | None
+
+
+class TeamRead(TeamBase):
+    id: int
+    trainer_id: int
+    created_at: datetime
+    members: list[TeamMemberRead]
