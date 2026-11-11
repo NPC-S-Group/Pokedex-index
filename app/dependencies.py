@@ -39,7 +39,7 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 def get_pokeapi_service() -> PokeAPIService:
-    return PokeAPIService(settings.pokeapi_base_url)
+    return PokeAPIService(settings.pokeapi_base_url, timeout=settings.pokeapi_timeout)
 
 
 ServicioPokeAPI = Annotated[PokeAPIService, Depends(get_pokeapi_service)]
