@@ -2,6 +2,7 @@
 
 | Archivo | Qué hace | Estado | Tarea |
 |---|---|---|---|
+| `export_service.py` | Pokédex a CSV (UTF-8 con BOM, celdas protegidas contra inyección de fórmulas) y a PDF con `fpdf2` (cabecera con filtros y totales, tabla paginada) | ✅ | #11 Miguel |
 | `pokeapi_service.py` | Cliente asíncrono (`httpx`) de la PokeAPI. Traduce errores (404 → 404, timeout → 504, caída → 502) y simplifica la respuesta a `{id, name, sprite, types, stats}` | ✅ código · ❌ logging de llamadas · ❌ tests con mock | #5 Henar |
 
 ## Cómo se usa

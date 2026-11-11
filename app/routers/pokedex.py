@@ -7,7 +7,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import func, select
 
 from app.dependencies import CurrentUser, ServicioPokeAPI, SessionDep
-from app.limits import LIMITE_AUTENTICADO, LIMITE_POKEAPI, limiter
+from app.limits import (
+    LIMITE_AUTENTICADO,
+    LIMITE_EXPORTAR,
+    LIMITE_POKEAPI,
+    limiter,
+)
 from app.models import (
     PokedexEntry,
     PokedexEntryCreate,
@@ -16,6 +21,7 @@ from app.models import (
     TeamMember,
     ahora,
 )
+from app.services.export_service import pokedex_a_csv, pokedex_a_pdf
 
 router = APIRouter(prefix="/pokedex", tags=["pokedex"])
 
@@ -76,14 +82,67 @@ def listar(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ):
+    consulta = _consulta_filtrada(usuario, captured, favorite, sort, order)
+    return session.exec(consulta.offset(offset).limit(limit)).all()
+
+
+def _consulta_filtrada(usuario, captured, favorite, sort, order):
+    """Las entradas del usuario con los filtros y el orden de ?captured=&favorite=&sort=&order=.
+
+    La comparten el listado y la exportación: lo que se ve es lo que se descarga.
+    """
     consulta = select(PokedexEntry).where(PokedexEntry.owner_id == usuario.id)
     if captured is not None:
         consulta = consulta.where(PokedexEntry.is_captured == captured)
     if favorite is not None:
         consulta = consulta.where(PokedexEntry.favorite == favorite)
     columna = ORDENABLE[sort]
-    consulta = consulta.order_by(columna.desc() if order == "desc" else columna.asc())
-    return session.exec(consulta.offset(offset).limit(limit)).all()
+    return consulta.order_by(columna.desc() if order == "desc" else columna.asc())
+
+
+# /export va ANTES que /{entry_id}, por lo mismo que /stats.
+@router.get(
+    "/export",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {"text/csv": {}, "application/pdf": {}},
+            "description": "Fichero con la Pokédex filtrada",
+        }
+    },
+)
+@limiter.limit(LIMITE_EXPORTAR)
+def exportar(
+    request: Request,
+    usuario: CurrentUser,
+    session: SessionDep,
+    format: Literal["csv", "pdf"] = "csv",
+    captured: bool | None = None,
+    favorite: bool | None = None,
+    sort: Literal["pokemon_id", "pokemon_name", "capture_date"] = "pokemon_id",
+    order: Literal["asc", "desc"] = "asc",
+):
+    # Sin paginación: se exporta todo lo que cumpla los filtros.
+    entradas = session.exec(
+        _consulta_filtrada(usuario, captured, favorite, sort, order)
+    ).all()
+    descarga = {"Content-Disposition": f'attachment; filename="pokedex.{format}"'}
+
+    if format == "csv":
+        return Response(
+            pokedex_a_csv(entradas),
+            media_type="text/csv; charset=utf-8",
+            headers=descarga,
+        )
+
+    filtros = {"captured": captured, "favorite": favorite}
+    aplicados = {k: str(v).lower() for k, v in filtros.items() if v is not None}
+    aplicados["orden"] = f"{sort} {order}"
+    return Response(
+        pokedex_a_pdf(entradas, usuario.username, aplicados),
+        media_type="application/pdf",
+        headers=descarga,
+    )
 
 
 def _contar(session, *condiciones) -> int:
