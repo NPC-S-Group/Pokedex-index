@@ -17,7 +17,9 @@ from app.models import (
 router = APIRouter(prefix="/teams", tags=["teams"])
 
 
-def _entradas_de_la_pokedex(session, usuario, pokemon_ids: list[int]) -> list[PokedexEntry]:
+def _entradas_de_la_pokedex(
+    session, usuario, pokemon_ids: list[int]
+) -> list[PokedexEntry]:
     """Devuelve las entradas en el mismo orden que pokemon_ids, o 400 si falta alguna."""
     entradas = session.exec(
         select(PokedexEntry).where(
@@ -80,7 +82,9 @@ def _equipo_propio(session, team_id: int, usuario) -> Team:
 
 @router.post("", response_model=TeamRead, status_code=status.HTTP_201_CREATED)
 @limiter.limit(LIMITE_AUTENTICADO)
-def crear(request: Request, datos: TeamCreate, usuario: CurrentUser, session: SessionDep):
+def crear(
+    request: Request, datos: TeamCreate, usuario: CurrentUser, session: SessionDep
+):
     entradas = _entradas_de_la_pokedex(session, usuario, datos.pokemon_ids)
     team = Team(trainer_id=usuario.id, name=datos.name, description=datos.description)
     _poner_miembros(team, entradas)
@@ -107,7 +111,13 @@ def detalle(request: Request, team_id: int, usuario: CurrentUser, session: Sessi
 
 @router.put("/{team_id}", response_model=TeamRead)
 @limiter.limit(LIMITE_AUTENTICADO)
-def actualizar(request: Request, team_id: int, datos: TeamCreate, usuario: CurrentUser, session: SessionDep):
+def actualizar(
+    request: Request,
+    team_id: int,
+    datos: TeamCreate,
+    usuario: CurrentUser,
+    session: SessionDep,
+):
     # PUT reemplaza el equipo entero: nombre, descripción y miembros.
     team = _equipo_propio(session, team_id, usuario)
     entradas = _entradas_de_la_pokedex(session, usuario, datos.pokemon_ids)

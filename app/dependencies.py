@@ -1,5 +1,6 @@
 """Dependencias compartidas: sesión, usuario actual y servicio de la PokeAPI."""
 
+import logging
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -15,6 +16,8 @@ from app.services.pokeapi_service import PokeAPIService
 LOGIN_URL = "/api/v1/auth/login"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=LOGIN_URL)
 
+logger_auth = logging.getLogger("pokedex_api.auth")
+
 SessionDep = Annotated[Session, Depends(get_session)]
 
 
@@ -28,9 +31,13 @@ def get_current_user(
     )
     payload = decode_access_token(token)
     if payload is None or "user_id" not in payload:
+        logger_auth.warning("token no válido o caducado")
         raise no_autorizado
     usuario = session.get(User, payload["user_id"])
     if usuario is None or not usuario.is_active:
+        logger_auth.warning(
+            "token de un usuario inexistente o inactivo (id=%s)", payload["user_id"]
+        )
         raise no_autorizado
     return usuario
 
