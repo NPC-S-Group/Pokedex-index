@@ -4,7 +4,7 @@ Un archivo por grupo de endpoints. Todos se registran en `main.py` con el prefij
 
 | Archivo | Endpoints | Límite | Estado | Tarea |
 |---|---|---|---|---|
-| `auth.py` | `POST /auth/register`, `POST /auth/login` | 5/h y 10/min | ✅ código · ❌ tests | #4 Miguel |
+| `auth.py` | `POST /auth/register`, `POST /auth/login`, `GET /auth/me` | 5/h, 10/min y 100/min | ✅ código · ✅ tests | #4 Miguel |
 | `pokemon.py` | `GET /pokemon/{id_or_name}` | 30/min | 🟡 falta habilidades y sprites completos | #8 Henar |
 | | `GET /pokemon/search`, `GET /pokemon/{id}/card` | 30/min | ❌ | #8 Henar |
 | `pokedex.py` | `POST`, `GET` (filtros, orden y paginación), `GET /{id}`, `PATCH`, `DELETE` | 30/min (POST), 100/min | ✅ código · ❌ tests | #7 Miguel |
