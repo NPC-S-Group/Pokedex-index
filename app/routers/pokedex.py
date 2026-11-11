@@ -128,10 +128,7 @@ def detalle(request: Request, entry_id: int, usuario: CurrentUser, session: Sess
 @limiter.limit(LIMITE_AUTENTICADO)
 def actualizar(
     request: Request,
-    entry_id: int,
-    datos: PokedexEntryUpdate,
-    usuario: CurrentUser,
-    session: SessionDep,
+    entry_id: int, datos: PokedexEntryUpdate, usuario: CurrentUser, session: SessionDep
 ):
     entrada = _entrada_propia(session, entry_id, usuario)
     cambios = datos.model_dump(exclude_unset=True)
