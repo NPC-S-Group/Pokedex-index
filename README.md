@@ -46,8 +46,8 @@ Cada endpoint tiene su límite (`app/limits.py`), contado por IP con `slowapi`:
 |---|---|---|
 | Públicos | `POST /auth/register` | 5 por hora |
 | | `POST /auth/login` | 10 por minuto |
-| Llaman a la PokeAPI | `GET /pokemon/{id}`, `POST /pokedex` | 30 por minuto |
-| Exportar | `GET /pokedex/export` (CSV o PDF) | 10 por minuto |
+| Llaman a la PokeAPI | `GET /pokemon/search`, `GET /pokemon/{id}`, `GET /pokemon/{id}/card` (PDF), `POST /pokedex`, `GET /teams/{id}/export` (PDF) | 30 por minuto |
+| Exportar la Pokédex | `GET /pokedex/export` (CSV o PDF, sin llamar a la PokeAPI) | 10 por minuto |
 | Autenticados | `GET /auth/me`, resto de `/pokedex` y `/teams` | 100 por minuto |
 | Sistema | `GET /health` | sin límite |
 
