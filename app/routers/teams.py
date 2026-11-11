@@ -1,10 +1,12 @@
 """Equipos de batalla: hasta 6 Pokémon de la propia Pokédex."""
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlmodel import select
 
-from app.dependencies import CurrentUser, SessionDep
-from app.limits import LIMITE_AUTENTICADO, limiter
+from app.dependencies import CurrentUser, ServicioPokeAPI, SessionDep
+from app.limits import LIMITE_AUTENTICADO, LIMITE_POKEAPI, limiter
 from app.models import (
     PokedexEntry,
     Team,
@@ -13,6 +15,7 @@ from app.models import (
     TeamMemberRead,
     TeamRead,
 )
+from app.services.equipo_pdf import generar_pdf_equipo
 
 router = APIRouter(prefix="/teams", tags=["teams"])
 
@@ -127,3 +130,44 @@ def borrar(request: Request, team_id: int, usuario: CurrentUser, session: Sessio
     session.delete(team)  # los miembros se borran en cascada
     session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/{team_id}/export",
+    response_class=Response,
+    responses={
+        200: {"content": {"application/pdf": {}}, "description": "Equipo en PDF"}
+    },
+)
+@limiter.limit(LIMITE_POKEAPI)  # consulta la PokeAPI por cada miembro
+async def exportar(
+    request: Request,
+    team_id: int,
+    usuario: CurrentUser,
+    session: SessionDep,
+    poke: ServicioPokeAPI,
+):
+    """Equipo en PDF: portada con estadísticas combinadas y la ficha de cada Pokémon."""
+    equipo = _a_respuesta(session, _equipo_propio(session, team_id, usuario))
+    # Los datos y las imágenes de los (hasta 6) miembros se piden a la vez.
+    pokemons = await asyncio.gather(
+        *(poke.get_pokemon(m.pokemon_id) for m in equipo.members)
+    )
+    imagenes = await asyncio.gather(
+        *(
+            poke.descargar_imagen(
+                (p.get("sprites") or {}).get("official_artwork") or p.get("sprite")
+            )
+            for p in pokemons
+        )
+    )
+    miembros = [
+        {"position": m.position, "nickname": m.nickname, "pokemon": p, "imagen": img}
+        for m, p, img in zip(equipo.members, pokemons, imagenes)
+    ]
+    pdf = generar_pdf_equipo(equipo.name, equipo.description, miembros)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="equipo-{team_id}.pdf"'},
+    )
