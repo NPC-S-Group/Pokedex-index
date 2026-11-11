@@ -9,8 +9,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import or_, select
 
 from app.auth import create_access_token, hash_password, verify_password
-from app.dependencies import SessionDep
-from app.limits import LIMITE_LOGIN, LIMITE_REGISTRO, limiter
+from app.dependencies import CurrentUser, SessionDep
+from app.limits import LIMITE_AUTENTICADO, LIMITE_LOGIN, LIMITE_REGISTRO, limiter
 from app.models import User, UserCreate, UserRead
 
 # Los nombres van con %r: escapa saltos de línea y nadie puede falsear líneas del log.
@@ -78,3 +78,10 @@ def login(
         "access_token": create_access_token(usuario.username, usuario.id),
         "token_type": "bearer",
     }
+
+
+@router.get("/me", response_model=UserRead)
+@limiter.limit(LIMITE_AUTENTICADO)
+def usuario_actual(request: Request, usuario: CurrentUser):
+    """Devuelve el usuario dueño del token (sin la contraseña, por UserRead)."""
+    return usuario

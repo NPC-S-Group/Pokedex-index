@@ -47,7 +47,7 @@ Cada endpoint tiene su límite (`app/limits.py`), contado por IP con `slowapi`:
 | Públicos | `POST /auth/register` | 5 por hora |
 | | `POST /auth/login` | 10 por minuto |
 | Llaman a la PokeAPI | `GET /pokemon/{id}`, `POST /pokedex` | 30 por minuto |
-| Autenticados | resto de `/pokedex` y `/teams` | 100 por minuto |
+| Autenticados | `GET /auth/me`, resto de `/pokedex` y `/teams` | 100 por minuto |
 | Sistema | `GET /health` | sin límite |
 
 **¿Por qué diferentes límites?** Porque el riesgo y el coste de cada endpoint son distintos. Los públicos no exigen token y son el objetivo natural de bots: el registro se usa una vez por persona y el login, unas pocas veces. Los que llaman a la PokeAPI consumen un servicio externo que no es nuestro y que también limita, así que no dejamos que un usuario lo agote. El resto es el uso normal de la API con un usuario identificado y puede ser más generoso.
