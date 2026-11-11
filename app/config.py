@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24
     pokeapi_base_url: str = "https://pokeapi.co/api/v2"
+    pokeapi_timeout: float = 5.0  # segundos; si se supera, la API responde 504
     cors_origins: list[str] = ["http://localhost:5173"]
 
 
