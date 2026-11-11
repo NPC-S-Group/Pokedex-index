@@ -4,7 +4,8 @@ Paquete principal de la Pokédex API (FastAPI + SQLModel).
 
 | Archivo | Qué hace | Estado |
 |---|---|---|
-| `main.py` | Crea la app: CORS, rate limiting, middleware de logging, routers bajo `/api/v1` y `/health` | ✅ |
+| `main.py` | Crea la app: CORS, rate limiting, logging, routers bajo `/api/v1` y `/health` | ✅ |
+| `logs.py` | Middleware de logging de peticiones y registro de 422 y 429 (ver «Logging» en el README) | ✅ (#10) |
 | `config.py` | Lee `.env` en un objeto `Settings` validado. Sin `SECRET_KEY` la app no arranca | ✅ |
 | `database.py` | Motor de la BD y una sesión por petición (`get_session`) | ✅ |
 | `models.py` | Tablas (`User`, `PokedexEntry`, `Team`, `TeamMember`) y esquemas de entrada y salida (`*Create`, `*Read`, `*Update`) | ✅ |
@@ -16,7 +17,7 @@ Paquete principal de la Pokédex API (FastAPI + SQLModel).
 
 ## Cómo encaja
 ```
-petición → CORS → logging → endpoint (router)
+petición → logging → rate limiting → CORS → endpoint (router)
                                  ├─ CurrentUser  → auth.py (JWT) → BD
                                  ├─ SessionDep   → database.py
                                  └─ ServicioPokeAPI → services/pokeapi_service.py → PokeAPI
@@ -24,6 +25,7 @@ petición → CORS → logging → endpoint (router)
 
 ## Avance
 - **10 nov:** base del hito 4 (#2), resto de archivos iniciales, equipos (#6) y rate limiting con CORS (#9).
-- **Pendiente:** logging completo (#10) y API v2 (#14).
+- **11 nov:** cliente de PokeAPI (#5) y logging completo (#10).
+- **Pendiente:** API v2 (#14).
 
 Leyenda: ✅ hecho · 🟡 a medias · ❌ falta

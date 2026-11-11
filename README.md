@@ -61,5 +61,28 @@ Cada endpoint tiene su límite (`app/limits.py`), contado por IP con `slowapi`:
 ### CORS
 Solo se aceptan los orígenes de `CORS_ORIGINS` (por defecto `http://localhost:5173`), los métodos que usa la API (GET, POST, PUT, PATCH y DELETE) y las cabeceras `Authorization` y `Content-Type`. Un navegador en otro origen no puede leer las respuestas.
 
+### Logging
+Todo lo importante queda en el log (`app/logs.py`), separado por tipo para poder filtrarlo:
+
+| Logger | Qué registra | Nivel |
+|---|---|---|
+| `pokedex_api.peticiones` | Una línea por petición: id, método, ruta, código, ms, usuario e IP | INFO (2xx/3xx), WARNING (4xx), ERROR (5xx y errores no controlados, con traza) |
+| `pokedex_api.auth` | Registros, logins correctos y fallidos, tokens no válidos | INFO / WARNING |
+| `pokedex_api.validacion` | Qué campos fallan en cada 422 y por qué | WARNING |
+| `pokedex_api.limites` | Quién supera qué límite (429) | WARNING |
+| `pokedex_api.pokeapi` | Llamadas a la PokeAPI y sus fallos | INFO / ERROR |
+
+```
+INFO pokedex_api.peticiones · [9f71ab0932f7] GET /api/v1/teams → 200 (8.4 ms) usuario='ash' ip=127.0.0.1
+WARNING pokedex_api.auth · login fallido para 'ash'
+WARNING pokedex_api.limites · [3c1d…] POST /api/v1/auth/login → 429 · límite 10 per 1 minute superado · usuario=anónimo ip=127.0.0.1
+```
+
+**¿Qué no se registra nunca?** Contraseñas, tokens, cuerpos de petición ni query strings. En los 422 se guarda qué campo falla, no el valor enviado (podría ser una contraseña). Los nombres de usuario se escriben con comillas y escapados, así que nadie puede colar un salto de línea y falsear una línea del log.
+
+**Id de petición:** cada respuesta lleva la cabecera `X-Request-ID`, y el mismo id aparece en todas las líneas de esa petición. Si el cliente manda su propio id (solo letras, números y guiones), se reutiliza.
+
+El nivel se cambia con `LOG_LEVEL` en el `.env` (`DEBUG`, `INFO`, `WARNING` o `ERROR`).
+
 ## Metodología
 Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado por otro miembro. Commits con Conventional Commits.

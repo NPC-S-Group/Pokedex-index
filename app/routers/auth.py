@@ -1,5 +1,6 @@
 """Registro y login."""
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -11,6 +12,9 @@ from app.auth import create_access_token, hash_password, verify_password
 from app.dependencies import SessionDep
 from app.limits import LIMITE_LOGIN, LIMITE_REGISTRO, limiter
 from app.models import User, UserCreate, UserRead
+
+# Los nombres van con %r: escapa saltos de línea y nadie puede falsear líneas del log.
+logger = logging.getLogger("pokedex_api.auth")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -24,6 +28,9 @@ def registrar(request: Request, datos: UserCreate, session: SessionDep):
         )
     ).first()
     if repetido:
+        logger.warning(
+            "registro rechazado: usuario o email ya existen (%r)", datos.username
+        )
         raise HTTPException(
             status.HTTP_409_CONFLICT, "El usuario o el email ya existen"
         )
@@ -39,10 +46,14 @@ def registrar(request: Request, datos: UserCreate, session: SessionDep):
     except IntegrityError:
         # Dos registros simultáneos con el mismo nombre: la base de datos decide.
         session.rollback()
+        logger.warning(
+            "registro rechazado: usuario o email ya existen (%r)", datos.username
+        )
         raise HTTPException(
             status.HTTP_409_CONFLICT, "El usuario o el email ya existen"
         )
     session.refresh(usuario)
+    logger.info("usuario registrado: %r (id=%s)", usuario.username, usuario.id)
     return usuario
 
 
@@ -56,11 +67,13 @@ def login(
     usuario = session.exec(select(User).where(User.username == form.username)).first()
     # Mismo mensaje para «no existe» y «contraseña mala»: no regalamos qué usuarios hay.
     if usuario is None or not verify_password(form.password, usuario.hashed_password):
+        logger.warning("login fallido para %r", form.username)
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
             "Usuario o contraseña incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    logger.info("login correcto: %r (id=%s)", usuario.username, usuario.id)
     return {
         "access_token": create_access_token(usuario.username, usuario.id),
         "token_type": "bearer",

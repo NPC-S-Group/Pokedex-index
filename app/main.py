@@ -1,12 +1,11 @@
 """Punto de entrada de la API. Base tomada del hito 4 de la práctica guiada."""
 
 import logging
-import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
@@ -15,11 +14,15 @@ from app import models  # noqa: F401
 from app.config import settings
 from app.database import create_db_and_tables
 from app.limits import limiter
+from app.logs import (
+    configurar_logging,
+    registrar_error_validacion,
+    registrar_limite_superado,
+    registrar_peticiones,
+)
 from app.routers import auth, pokedex, pokemon, teams
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s · %(message)s"
-)
+configurar_logging(settings.log_level)
 logger = logging.getLogger("pokedex_api")
 
 
@@ -48,23 +51,13 @@ app.add_middleware(
 
 # Límites por endpoint (@limiter.limit) y por defecto (default_limits) en app/limits.py.
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, registrar_limite_superado)
 app.add_middleware(SlowAPIMiddleware)
 
-
-@app.middleware("http")
-async def registrar_peticiones(request: Request, call_next):
-    inicio = time.perf_counter()
-    respuesta = await call_next(request)
-    ms = (time.perf_counter() - inicio) * 1000
-    logger.info(
-        "%s %s → %s (%.1f ms)",
-        request.method,
-        request.url.path,
-        respuesta.status_code,
-        ms,
-    )
-    return respuesta
+# Logging (app/logs.py): se añade el último para ser el más externo y ver todas
+# las respuestas, también las de CORS y las 429.
+app.add_exception_handler(RequestValidationError, registrar_error_validacion)
+app.middleware("http")(registrar_peticiones)
 
 
 for modulo in (auth, pokemon, pokedex, teams):

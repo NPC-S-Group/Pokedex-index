@@ -14,9 +14,11 @@ El CI exige **cobertura ≥ 80 %**. El enunciado pide **mínimo 15 tests**.
 | `test_rate_limit_cors.py` | 429 de cada nivel y CORS | 8 | #9 |
 | `test_auth.py` | Registro, login y token | ❌ falta | #4 Miguel |
 | `test_pokedex.py` | CRUD, filtros y propiedad | ❌ falta | #7 Miguel |
-| `test_pokeapi_service.py` | Servicio con mock: OK, 404 y timeout | ❌ falta | #5 Henar |
+| `test_pokeapi_service.py` | Servicio con mock: OK, errores, timeouts y logging | 31 | #5 Henar |
+| `test_logging.py` | Logging de peticiones, auth, 422 y 429; que no se filtren contraseñas ni tokens | 22 | #10 Henar |
 
-**Avance (10 nov):** 25 tests y 81 % de cobertura.
+**Avance (10 nov):** 25 tests y 81 % de cobertura.  
+**Avance (11 nov):** 78 tests y 90 % de cobertura.
 
 ## Fixtures de `conftest.py`
 | Fixture | Para qué |
