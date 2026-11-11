@@ -111,7 +111,9 @@ def test_login_tras_registrarse(client):
 
 
 def test_login_contrasena_mala(client, test_user):
-    r = client.post(LOGIN, data={"username": test_user.username, "password": "Mala1234"})
+    r = client.post(
+        LOGIN, data={"username": test_user.username, "password": "Mala1234"}
+    )
     assert r.status_code == 401
     assert r.headers["www-authenticate"] == "Bearer"
 

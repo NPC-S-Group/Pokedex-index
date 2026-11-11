@@ -96,6 +96,15 @@ class PokedexEntryUpdate(SQLModel):
     favorite: bool | None = None
     capture_date: datetime | None = None
 
+    @field_validator("capture_date")
+    @classmethod
+    def fecha_con_zona(cls, valor: datetime | None) -> datetime | None:
+        # Una fecha sin zona horaria («2026-01-15T10:00:00») se toma como UTC.
+        # Sin esto la base de datos la rechaza y la API devolvía un 500.
+        if valor is not None and valor.tzinfo is None:
+            return valor.replace(tzinfo=UTC)
+        return valor
+
 
 # ───────────────────────────── Equipos ─────────────────────────────
 
