@@ -9,7 +9,7 @@ Paquete principal de la Pokédex API (FastAPI + SQLModel).
 | `config.py` | Lee `.env` en un objeto `Settings` validado. Sin `SECRET_KEY` la app no arranca | ✅ |
 | `database.py` | Motor de la BD y una sesión por petición (`get_session`) | ✅ |
 | `models.py` | Tablas (`User`, `PokedexEntry`, `Team`, `TeamMember`) y esquemas de entrada y salida (`*Create`, `*Read`, `*Update`) | ✅ |
-| `auth.py` | Hash de contraseñas con bcrypt y creación y lectura de JWT | ✅ código · ❌ tests (#4) |
+| `auth.py` | Hash de contraseñas con bcrypt y creación y lectura de JWT | ✅ (#4) |
 | `dependencies.py` | Dependencias comunes: `SessionDep`, `CurrentUser` (usuario del token) y `ServicioPokeAPI` | ✅ |
 | `limits.py` | Limitador de slowapi y los cuatro niveles de límite | ✅ (#9) |
 | `routers/` | Endpoints, un archivo por grupo ([ver README](routers/README.md)) | 🟡 |
@@ -26,6 +26,8 @@ petición → logging → rate limiting → CORS → endpoint (router)
 ## Avance
 - **10 nov:** base del hito 4 (#2), resto de archivos iniciales, equipos (#6) y rate limiting con CORS (#9).
 - **11 nov:** cliente de PokeAPI (#5) y logging completo (#10).
+- **11 nov:** auth (#4): `GET /auth/me` y tests de registro, login y JWT (PR #28).
+- **11 nov:** tests del CRUD de la Pokédex y fix de `capture_date` sin zona horaria (#7, PR #29).
 - **Pendiente:** API v2 (#14).
 
 Leyenda: ✅ hecho · 🟡 a medias · ❌ falta
