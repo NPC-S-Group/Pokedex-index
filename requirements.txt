@@ -14,9 +14,10 @@ python-jose[cryptography]>=3.5.0
 slowapi>=0.1.10
 httpx>=0.28.1
 
-# Fichas en PDF
+# PDF: fichas (#8), equipos (#13) y Pokédex (#11)
 fpdf2>=2.8
 
 # Tests
 pytest>=9.1.1
 pytest-cov>=7.1.0
+pypdf>=5  # leer el PDF generado en tests/test_export.py

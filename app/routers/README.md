@@ -8,7 +8,7 @@ Un archivo por grupo de endpoints. Todos se registran en `main.py` con el prefij
 | `pokemon.py` | `GET /pokemon/search?q=&type=&limit=&offset=`, `GET /pokemon/{id_or_name}`, `GET /pokemon/{id_or_name}/card` (PDF) | 30/min | ✅ con tests (100 %) | #8 Henar |
 | `pokedex.py` | `POST`, `GET` (filtros, orden y paginación), `GET /{id}`, `PATCH`, `DELETE` | 30/min (POST), 100/min | ✅ código · ✅ tests | #7 Miguel |
 | | `GET /pokedex/stats` | 100/min | 🟡 falta `most_common_type` y `capture_streak_days` | #12 Henar |
-| | `GET /pokedex/export` (CSV/PDF) | | ❌ | #11 Miguel |
+| | `GET /pokedex/export?format=csv\|pdf` con los filtros y el orden del listado | 10/min | ✅ código · ✅ tests | #11 Miguel |
 | `teams.py` | `POST`, `GET`, `GET /{id}`, `PUT`, `DELETE` | 100/min | ✅ con tests (100 %) | #6 Jorge |
 | | `GET /teams/{id}/export` (PDF) | 30/min | ✅ con tests (100 %) | #13 Jorge |
 
