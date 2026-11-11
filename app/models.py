@@ -162,3 +162,53 @@ class TeamRead(TeamBase):
     trainer_id: int
     created_at: datetime
     members: list[TeamMemberRead]
+
+
+# ──────────────────────── PokeAPI (solo respuestas) ────────────────────────
+# No son tablas: describen lo que devuelve /pokemon para que salga en /docs.
+
+
+class PokemonSprites(SQLModel):
+    front_default: str | None = None
+    back_default: str | None = None
+    front_shiny: str | None = None
+    official_artwork: str | None = None
+
+
+class PokemonAbility(SQLModel):
+    name: str
+    is_hidden: bool = False
+
+
+class PokemonStats(SQLModel):
+    hp: int | None = None
+    attack: int | None = None
+    defense: int | None = None
+    special_attack: int | None = None
+    special_defense: int | None = None
+    speed: int | None = None
+
+
+class PokemonDetail(SQLModel):
+    id: int
+    name: str
+    sprite: str | None = None
+    sprites: PokemonSprites = PokemonSprites()
+    types: list[str] = []
+    height_m: float | None = None
+    weight_kg: float | None = None
+    abilities: list[PokemonAbility] = []
+    stats: PokemonStats = PokemonStats()
+
+
+class PokemonSummary(SQLModel):
+    id: int
+    name: str
+    sprite: str | None = None
+
+
+class PokemonSearchPage(SQLModel):
+    count: int
+    limit: int
+    offset: int
+    results: list[PokemonSummary]

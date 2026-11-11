@@ -25,9 +25,7 @@ petición → logging → rate limiting → CORS → endpoint (router)
 
 ## Avance
 - **10 nov:** base del hito 4 (#2), resto de archivos iniciales, equipos (#6) y rate limiting con CORS (#9).
-- **11 nov:** cliente de PokeAPI (#5) y logging completo (#10).
-- **11 nov:** auth (#4): `GET /auth/me` y tests de registro, login y JWT (PR #28).
-- **11 nov:** tests del CRUD de la Pokédex y fix de `capture_date` sin zona horaria (#7, PR #29).
+- **11 nov:** cliente de PokeAPI (#5) y logging completo (#10), de Henar; auth con `GET /auth/me` y sus tests (#4, PR #28) y tests del CRUD de la Pokédex con el fix de `capture_date` (#7, PR #29), de Miguel; búsqueda y ficha PDF (#8, Henar); equipo en PDF (#13, Jorge).
 - **Pendiente:** API v2 (#14).
 
 Leyenda: ✅ hecho · 🟡 a medias · ❌ falta

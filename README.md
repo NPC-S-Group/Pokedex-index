@@ -62,6 +62,17 @@ Cada endpoint tiene su límite (`app/limits.py`), contado por IP con `slowapi`:
 ### CORS
 Solo se aceptan los orígenes de `CORS_ORIGINS` (por defecto `http://localhost:5173`), los métodos que usa la API (GET, POST, PUT, PATCH y DELETE) y las cabeceras `Authorization` y `Content-Type`. Un navegador en otro origen no puede leer las respuestas.
 
+### Búsqueda y ficha de Pokémon
+| Endpoint | Qué hace |
+|---|---|
+| `GET /api/v1/pokemon/search?q=chu&type=electric&limit=20&offset=0` | Busca por parte del nombre y/o por tipo. Devuelve `{count, limit, offset, results: [{id, name, sprite}]}` ordenado por número |
+| `GET /api/v1/pokemon/{id_or_name}` | Detalle: tipos, altura (m), peso (kg), habilidades (y si son ocultas), sprites y las seis estadísticas base |
+| `GET /api/v1/pokemon/{id_or_name}/card` | Ficha en PDF (A5) con imagen, tipos, datos y barras de estadísticas |
+
+**¿Cómo se busca si la PokeAPI no tiene búsqueda?** Se pide una vez la lista de todos los nombres (una sola llamada, ~1300 Pokémon) y se filtra en nuestro servidor. La lista se guarda en memoria 24 horas, porque casi nunca cambia: así buscar no gasta llamadas a la PokeAPI. Con `type` se usa `/type/{tipo}`, que ya trae solo los de ese tipo (también en caché).
+
+**Ficha en PDF:** se genera con `fpdf2`, en memoria, sin guardar archivos. La imagen se descarga solo del repositorio oficial de sprites (`raw.githubusercontent.com`, por HTTPS y como mucho 2 MB): así la API no puede usarse para descargar cosas de otros sitios. Si la imagen falla, la ficha sale igual con el hueco «Sin imagen».
+
 ### Logging
 Todo lo importante queda en el log (`app/logs.py`), separado por tipo para poder filtrarlo:
 

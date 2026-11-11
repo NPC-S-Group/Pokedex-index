@@ -61,6 +61,10 @@ class PokeAPIFalsa:
             status.HTTP_404_NOT_FOUND, f"No existe el Pokémon {identificador}"
         )
 
+    async def descargar_imagen(self, url: str | None) -> bytes | None:
+        # Sin red: los PDF salen con el hueco de "Sin imagen".
+        return None
+
 
 @pytest.fixture
 def session():

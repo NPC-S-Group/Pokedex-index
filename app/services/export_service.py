@@ -14,6 +14,9 @@ from fpdf.enums import XPos, YPos
 
 from app.models import PokedexEntry
 
+# Fuentes básicas del PDF: sólo Latin-1. Lo que no cabe (emojis…) sale como «?».
+from app.services.ficha_pdf import _texto as _latin1
+
 COLUMNAS = [
     "pokemon_id",
     "pokemon_name",
@@ -60,12 +63,6 @@ def pokedex_a_csv(entradas: Sequence[PokedexEntry]) -> str:
 
 
 # ───────────────────────────── PDF ─────────────────────────────
-
-
-def _latin1(texto: str) -> str:
-    # Las fuentes básicas del PDF sólo cubren Latin-1 (tildes y ñ sí, emojis no).
-    # Lo que no cabe se cambia por «?» en vez de romper la exportación.
-    return texto.encode("latin-1", "replace").decode("latin-1")
 
 
 def pokedex_a_pdf(
