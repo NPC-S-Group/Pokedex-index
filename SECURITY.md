@@ -19,6 +19,11 @@ Si encuentras una vulnerabilidad, **no abras una issue pública**. Escribe direc
 | Fallos de un servicio externo | Timeout y traducción de errores de la PokeAPI a 502/504, sin trazas internas | `app/services/pokeapi_service.py` |
 | Fuga de secretos | `.env` en `.gitignore` y `.dockerignore`. El CI usa claves de prueba. Historial revisado sin secretos | raíz del repo |
 | Contenedor comprometido | La imagen corre con un usuario sin privilegios (`api`) | `Dockerfile` |
+| Peticiones a otros sitios desde el servidor (SSRF) | Las imágenes de las fichas en PDF solo se descargan de `raw.githubusercontent.com`, por HTTPS y hasta 2 MB. Se compara el host exacto: `raw.githubusercontent.com.evil.com` se rechaza | `app/services/pokeapi_service.py` |
+| Datos sensibles en los logs | No se registran contraseñas, tokens, cuerpos de petición ni query strings. En los 422 solo se guarda qué campo falla, nunca el valor enviado | `app/logs.py` |
+| Falsear líneas del log (log injection) | Los nombres de usuario se escriben con `%r`, con los saltos de línea escapados. Un `X-Request-ID` del cliente solo se reutiliza si son letras, números y guiones | `app/logs.py`, `app/routers/auth.py` |
+| Inyección en la cabecera de descarga | El nombre del fichero de la ficha se limpia antes de ponerlo en `Content-Disposition` | `app/routers/pokemon.py` |
+| Ficheros en el servidor | Los PDF se generan en memoria y se envían sin escribir nada en disco | `app/services/ficha_pdf.py` |
 
 ## Gestión de secretos
 - La configuración se lee de variables de entorno o de `.env` (ver `.env.example`). **El `.env` real nunca se sube**: un secreto subido queda en el historial aunque se borre después.
@@ -29,4 +34,5 @@ Si encuentras una vulnerabilidad, **no abras una issue pública**. Escribe direc
 - **Los tokens no se pueden revocar** antes de que caduquen: cerrar sesión solo borra el token en el cliente.
 - **El rate limiting es por IP y en memoria:** se reinicia al reiniciar la app, no se comparte entre varias instancias y varios usuarios detrás de la misma IP comparten límite.
 - **SQLite** es para desarrollo y la práctica. En producción convendría PostgreSQL.
+- **La caché de la búsqueda de Pokémon** (24 h) está en memoria: se pierde al reiniciar y no se comparte entre varias instancias.
 - Las dependencias se instalan con versiones mínimas (`>=`) en `requirements.txt`. `uv.lock` fija las versiones exactas para quien use `uv`.

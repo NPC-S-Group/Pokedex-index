@@ -34,7 +34,7 @@ Copia `.env.example` como `.env` y rellena los valores:
 | `DATABASE_URL` | Conexión a la base de datos (por defecto `sqlite:///./pokedex.db`) |
 | `CORS_ORIGINS` | Orígenes permitidos para CORS, como lista JSON (por defecto `["http://localhost:5173"]`) |
 | `POKEAPI_TIMEOUT` | Opcional. Segundos de espera a la PokeAPI antes de responder 504 (por defecto 5) |
-| `LOG_LEVEL` | Opcional. Nivel de log (por defecto `INFO`) |
+| `LOG_LEVEL` | Opcional. Nivel de log: `DEBUG`, `INFO`, `WARNING` o `ERROR` (por defecto `INFO`) |
 
 ## Ejecución
 **En local** (con el `.env` configurado):
@@ -102,6 +102,25 @@ Cada endpoint tiene su límite (`app/limits.py`), contado por IP con `slowapi`:
 
 ### CORS
 Solo se aceptan los orígenes de `CORS_ORIGINS` (por defecto `http://localhost:5173`), los métodos que usa la API (GET, POST, PUT, PATCH y DELETE) y las cabeceras `Authorization` y `Content-Type`. Un navegador en otro origen no puede leer las respuestas.
+
+### Cliente de PokeAPI
+Toda la comunicación con la PokeAPI pasa por `PokeAPIService` (`app/services/pokeapi_service.py`). Cada llamada queda registrada en el logger `pokedex_api.pokeapi` con la URL, el código y los milisegundos.
+
+**¿Qué pasa si la PokeAPI falla?** Nuestra API nunca responde un 500 por culpa de un servicio externo. Cada fallo se traduce a un código que dice de quién es el problema:
+
+| Qué pasa en la PokeAPI | Qué respondemos |
+|---|---|
+| El Pokémon o el tipo no existe | `404 Not Found` |
+| Identificador vacío o con caracteres raros | `422` (sin llamar a la PokeAPI) |
+| Tarda más que `POKEAPI_TIMEOUT` | `504 Gateway Timeout` |
+| Sin conexión, responde 5xx o 429 | `502 Bad Gateway` |
+| Responde algo que no es JSON o le faltan campos | `502 Bad Gateway` |
+
+El 500 queda para los errores de nuestro propio código. Así, quien use la API distingue un fallo nuestro de uno de la PokeAPI.
+
+**Respuesta simplificada:** de la respuesta de la PokeAPI solo se guarda lo que usamos: id, nombre, tipos, altura en metros, peso en kilos, habilidades, imágenes y las seis estadísticas base. Si falta un dato que no es imprescindible, como la imagen, sale `null` en vez de fallar.
+
+**Antes de llamar fuera:** el identificador se pasa a minúsculas y sin espacios, y solo se aceptan letras, números y guiones. Un nombre como `../ditto` se rechaza con 422 sin hacer la petición.
 
 ### Búsqueda y ficha de Pokémon
 | Endpoint | Qué hace |
@@ -177,6 +196,8 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
 - **Rate limiting** por tipo de endpoint y **CORS** limitado a los orígenes de `CORS_ORIGINS`.
 - **Secretos fuera del repo:** `.env` en `.gitignore` y `.dockerignore`. El CI usa claves de prueba.
 - **Contenedor** con usuario sin privilegios.
+- **Imágenes de las fichas** solo desde `raw.githubusercontent.com`, por HTTPS y hasta 2 MB: la API no se puede usar para hacer peticiones a otros sitios (SSRF).
+- **Logs sin datos sensibles:** ni contraseñas, ni tokens, ni cuerpos de petición, ni query strings. Los nombres de usuario se escapan para que nadie pueda inventar líneas en el log.
 - Detalle y limitaciones conocidas en [`SECURITY.md`](SECURITY.md).
 
 ## Mejoras Futuras
