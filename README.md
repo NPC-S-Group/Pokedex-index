@@ -1,16 +1,20 @@
 # Pokédex API
 
+![CI](https://github.com/NPC-S-Group/Pokedex-index/actions/workflows/ci.yml/badge.svg)
+
 API REST con FastAPI que consume PokeAPI y permite a cada usuario gestionar su Pokédex y sus equipos de batalla. Práctica 1 de Sistemas de Información (UFV).
 
 ## Descripción
-_Pendiente._
+Cada usuario se registra, inicia sesión con un token JWT y gestiona su propia Pokédex: busca Pokémon en la [PokeAPI](https://pokeapi.co), los añade, marca cuáles ha capturado y cuáles son favoritos, consulta sus estadísticas y la exporta en CSV o PDF. También puede montar equipos de batalla de hasta 6 Pokémon de su Pokédex y descargarlos en PDF, con la ficha de cada uno y las estadísticas combinadas del equipo.
+
+Stack: FastAPI, SQLModel (SQLite por defecto), JWT con `python-jose`, `bcrypt`, `slowapi`, `httpx` y `fpdf2`. Tests con `pytest` y CI con GitHub Actions.
 
 ## Equipo
 | Miembro | Usuario Git | Partes desarrolladas |
 |---|---|---|
-| Jorge Aranda | [@jorgearanda179](https://github.com/jorgearanda179) | _Pendiente_ |
-| Miguel Pina | [@miguelpina671-cmd](https://github.com/miguelpina671-cmd) | _Pendiente_ |
-| Henar Oliva | [@henarolivaperez-lang](https://github.com/henarolivaperez-lang) | _Pendiente_ |
+| Jorge Aranda | [@jorgearanda179](https://github.com/jorgearanda179) | Organización, repo, tablero y CI (GitHub Actions + Docker); estructura base; fixtures comunes de tests; equipos de batalla y su export en PDF; rate limiting y CORS; documentación |
+| Miguel Pina | [@miguelpina671-cmd](https://github.com/miguelpina671-cmd) | Autenticación (`/auth/me`) y sus tests; tests del CRUD de la Pokédex y fix de `capture_date`; export de la Pokédex en CSV/PDF; API v2 de ejemplo |
+| Henar Oliva | [@henarolivaperez-lang](https://github.com/henarolivaperez-lang) | Cliente de PokeAPI (errores, timeouts y logging); middleware de logging; búsqueda, detalle y ficha en PDF; estadísticas ampliadas |
 
 ## Instalación
 ```bash
@@ -26,16 +30,53 @@ Copia `.env.example` como `.env` y rellena los valores:
 
 | Variable | Para qué sirve |
 |---|---|
-| `SECRET_KEY` | Clave para firmar los tokens JWT |
-| `DATABASE_URL` | Cadena de conexión a la base de datos |
+| `SECRET_KEY` | **Obligatoria.** Clave para firmar los JWT. Genera una con `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
+| `DATABASE_URL` | Conexión a la base de datos (por defecto `sqlite:///./pokedex.db`) |
+| `CORS_ORIGINS` | Orígenes permitidos para CORS, como lista JSON (por defecto `["http://localhost:5173"]`) |
+| `POKEAPI_TIMEOUT` | Opcional. Segundos de espera a la PokeAPI antes de responder 504 (por defecto 5) |
+| `LOG_LEVEL` | Opcional. Nivel de log: `DEBUG`, `INFO`, `WARNING` o `ERROR` (por defecto `INFO`) |
 
 ## Ejecución
-_Pendiente._
+**En local** (con el `.env` configurado):
+```bash
+uvicorn app.main:app --reload
+```
+La API queda en <http://localhost:8000> y la documentación interactiva (Swagger) en <http://localhost:8000/docs>. Para probar los endpoints protegidos: `POST /api/v1/auth/register`, después el botón **Authorize** con tu usuario y contraseña.
+
+**Con Docker:**
+```bash
+docker build -t pokedex-api .
+docker run --rm -p 8000:8000 --env-file .env pokedex-api
+```
+La imagen corre con un usuario sin privilegios y no incluye `.env` ni bases de datos (`.dockerignore`).
 
 ## Tests
 ```bash
 pytest --cov=app --cov-report=term-missing
 ```
+
+## Endpoints
+Todos bajo `/api/v1` salvo `/health`. 🔒 = requiere `Authorization: Bearer <token>`.
+
+| Método | Ruta | Qué hace | Límite |
+|---|---|---|---|
+| POST | `/auth/register` | Registro (contraseña con mayúscula y número, mínimo 8) | 5/hora |
+| POST | `/auth/login` | Login (formulario OAuth2); devuelve el JWT | 10/min |
+| GET 🔒 | `/auth/me` | Usuario actual | 100/min |
+| GET 🔒 | `/pokemon/search?q=&type=&limit=&offset=` | Busca en la PokeAPI por nombre y/o tipo | 30/min |
+| GET 🔒 | `/pokemon/{id_or_name}` | Detalle: tipos, habilidades, sprites y estadísticas | 30/min |
+| GET 🔒 | `/pokemon/{id_or_name}/card` | Ficha del Pokémon en PDF | 30/min |
+| POST 🔒 | `/pokedex` | Añade un Pokémon (valida que exista; sin duplicados) | 30/min |
+| GET 🔒 | `/pokedex?captured=&favorite=&sort=&order=&limit=&offset=` | Lista tu Pokédex | 100/min |
+| GET 🔒 | `/pokedex/stats` | Total, capturados, favoritos, % completado, tipo más común y racha | 100/min |
+| GET 🔒 | `/pokedex/export?format=csv\|pdf` | Exporta la Pokédex con los mismos filtros | 10/min |
+| GET · PATCH · DELETE 🔒 | `/pokedex/{entry_id}` | Detalle, actualización parcial y borrado de una entrada propia | 100/min |
+| GET · POST 🔒 | `/teams` | Lista tus equipos · crea uno (1 a 6 Pokémon de tu Pokédex) | 100/min |
+| GET · PUT · DELETE 🔒 | `/teams/{team_id}` | Detalle, reemplazo completo y borrado | 100/min |
+| GET 🔒 | `/teams/{team_id}/export` | Equipo en PDF: estadísticas combinadas y fichas | 30/min |
+| GET | `/health` | Estado de la API | — |
+
+Errores comunes: `401` sin token o token inválido · `404` no existe o es de otro usuario · `409` duplicado · `422` datos no válidos · `429` límite superado · `502/504` la PokeAPI falla o no responde.
 
 ## Decisiones de Diseño
 
@@ -61,6 +102,25 @@ Cada endpoint tiene su límite (`app/limits.py`), contado por IP con `slowapi`:
 
 ### CORS
 Solo se aceptan los orígenes de `CORS_ORIGINS` (por defecto `http://localhost:5173`), los métodos que usa la API (GET, POST, PUT, PATCH y DELETE) y las cabeceras `Authorization` y `Content-Type`. Un navegador en otro origen no puede leer las respuestas.
+
+### Cliente de PokeAPI
+Toda la comunicación con la PokeAPI pasa por `PokeAPIService` (`app/services/pokeapi_service.py`). Cada llamada queda registrada en el logger `pokedex_api.pokeapi` con la URL, el código y los milisegundos.
+
+**¿Qué pasa si la PokeAPI falla?** Nuestra API nunca responde un 500 por culpa de un servicio externo. Cada fallo se traduce a un código que dice de quién es el problema:
+
+| Qué pasa en la PokeAPI | Qué respondemos |
+|---|---|
+| El Pokémon o el tipo no existe | `404 Not Found` |
+| Identificador vacío o con caracteres raros | `422` (sin llamar a la PokeAPI) |
+| Tarda más que `POKEAPI_TIMEOUT` | `504 Gateway Timeout` |
+| Sin conexión, responde 5xx o 429 | `502 Bad Gateway` |
+| Responde algo que no es JSON o le faltan campos | `502 Bad Gateway` |
+
+El 500 queda para los errores de nuestro propio código. Así, quien use la API distingue un fallo nuestro de uno de la PokeAPI.
+
+**Respuesta simplificada:** de la respuesta de la PokeAPI solo se guarda lo que usamos: id, nombre, tipos, altura en metros, peso en kilos, habilidades, imágenes y las seis estadísticas base. Si falta un dato que no es imprescindible, como la imagen, sale `null` en vez de fallar.
+
+**Antes de llamar fuera:** el identificador se pasa a minúsculas y sin espacios, y solo se aceptan letras, números y guiones. Un nombre como `../ditto` se rechaza con 422 sin hacer la petición.
 
 ### Búsqueda y ficha de Pokémon
 | Endpoint | Qué hace |
@@ -125,3 +185,37 @@ Las rutas llevan la versión en la URL (`/api/v1/...`, `/api/v2/...`). Como ejem
 
 ## Metodología
 Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado por otro miembro. Commits con Conventional Commits.
+
+## Flujo de trabajo y despliegue
+- **Ramas:** `main` (versiones entregables) ← `develop` (integración) ← `features/<nombre>` (una por tarea, con sus tests).
+- **Pull requests:** todo entra en `develop` por PR revisado y aprobado por otro miembro. Las versiones pasan a `main` con un PR `develop → main`, una etiqueta y una release (`v0.5.0`, `v1.0.0`).
+- **Tablero:** issues por tarea en un GitHub Project con columnas Por hacer / En curso / Hecho, fechas (vista Roadmap) e hitos.
+- **CI** (`.github/workflows/ci.yml`): en cada push y PR a `main` o `develop`, tests con cobertura mínima del 80 % en GitHub y, si `HOMELAB_RUNNER=true`, construcción de la imagen Docker y prueba de arranque en un runner propio.
+- **Despliegue:** la imagen Docker está lista y probada en el CI. No se ha desplegado en una plataforma pública (ver *Mejoras futuras*).
+
+## Otras decisiones de diseño
+- **404 y no 403 con lo ajeno:** si una entrada o un equipo es de otro usuario, respondemos como si no existiera, para no confirmar qué ids hay.
+- **Equipos:** se guardan las entradas de la Pokédex, no los ids sueltos de la PokeAPI, así que solo se pueden usar Pokémon que tienes. La posición sigue el orden enviado y `PUT` reemplaza el equipo entero. Borrar un Pokémon de la Pokédex lo saca de sus equipos.
+- **PokeAPI aislada en un servicio** (`app/services/pokeapi_service.py`) que se inyecta como dependencia: los routers no saben de `httpx` y los tests la sustituyen por una falsa, sin salir a internet.
+- **Un solo generador de PDF** (`fpdf2`, Python puro): la ficha del Pokémon se reutiliza en el PDF del equipo.
+- **`bcrypt` directo en lugar de `passlib`:** `passlib` lleva años sin mantenerse y falla con `bcrypt >= 4.1`.
+- **Límites explícitos en cada endpoint:** `default_limits` de slowapi no se aplica a las rutas de los routers con esta versión de FastAPI (lo detectaron los tests), así que cada endpoint declara su `@limiter.limit`.
+
+## Decisiones de Seguridad
+- **Contraseñas** con `bcrypt` (sal por usuario). Nunca se devuelven ni se registran en los logs.
+- **JWT** firmados con HS256 y `SECRET_KEY`, con caducidad de 24 horas. Sin `SECRET_KEY` la aplicación no arranca: no hay clave por defecto.
+- **Login sin pistas:** el mismo mensaje para "no existe el usuario" y "contraseña incorrecta".
+- **Validación de entrada** con Pydantic (longitudes, rangos, contraseña robusta, máximo 6 por equipo). Los identificadores de Pokémon se validan antes de llamar fuera, y el orden (`sort`) se traduce a columna con una lista cerrada, nunca se pega en el SQL.
+- **Rate limiting** por tipo de endpoint y **CORS** limitado a los orígenes de `CORS_ORIGINS`.
+- **Secretos fuera del repo:** `.env` en `.gitignore` y `.dockerignore`. El CI usa claves de prueba.
+- **Contenedor** con usuario sin privilegios.
+- **Imágenes de las fichas** solo desde `raw.githubusercontent.com`, por HTTPS y hasta 2 MB: la API no se puede usar para hacer peticiones a otros sitios (SSRF).
+- **Logs sin datos sensibles:** ni contraseñas, ni tokens, ni cuerpos de petición, ni query strings. Los nombres de usuario se escapan para que nadie pueda inventar líneas en el log.
+- Detalle y limitaciones conocidas en [`SECURITY.md`](SECURITY.md).
+
+## Mejoras Futuras
+- Desplegar la imagen en una plataforma (Render, Railway o Fly.io) con PostgreSQL.
+- Revocar tokens (lista de bloqueo o tokens de refresco cortos).
+- Rate limiting por usuario y con almacenamiento compartido (Redis), en lugar de por IP y en memoria.
+- Migraciones de base de datos con Alembic.
+- Caché de las respuestas de la PokeAPI más allá de la búsqueda.
