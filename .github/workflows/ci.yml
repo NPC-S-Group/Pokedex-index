@@ -5,6 +5,8 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  # Permite relanzar el despliegue a mano desde la pestaña Actions (solo sobre main).
+  workflow_dispatch:
 
 jobs:
   # Trabajo obligatorio del enunciado: runner de GitHub (ubuntu-latest).
@@ -63,3 +65,74 @@ jobs:
         run: |
           docker rm -f "$CONTENEDOR" || true
           docker rmi "$IMAGEN" || true
+
+  # Despliegue continuo en el homelab: solo cuando cambia main y después de los
+  # tests. Se activa con la variable del repo HOMELAB_DEPLOY=true. La clave real
+  # está en el secreto HOMELAB_SECRET_KEY, nunca en el código.
+  deploy-homelab:
+    needs: tests
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      vars.HOMELAB_DEPLOY == 'true'
+    runs-on: [self-hosted, homelab]
+    timeout-minutes: 15
+    concurrency:
+      group: deploy-homelab
+      cancel-in-progress: false
+    env:
+      DOCKER_BUILDKIT: "1"
+      IMAGEN: pokedex-api:prod
+      CONTENEDOR: pokedex-api
+      PUERTO: "8000"
+      URL: http://127.0.0.1:8000
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir la imagen
+        run: docker build -t "$IMAGEN" .
+      - name: Sustituir el contenedor en marcha
+        env:
+          SECRET_KEY: ${{ secrets.HOMELAB_SECRET_KEY }}
+        run: |
+          test -n "$SECRET_KEY" || { echo "Falta el secreto HOMELAB_SECRET_KEY"; exit 1; }
+          docker rm -f "$CONTENEDOR" 2>/dev/null || true
+          # Los datos (BD y log) viven en un volumen: sobreviven a cada despliegue.
+          docker run -d --name "$CONTENEDOR" --restart unless-stopped \
+            -p "$PUERTO:8000" \
+            -e SECRET_KEY \
+            -e DATABASE_URL=sqlite:////srv/api/data/pokedex.db \
+            -e LOG_FILE=/srv/api/data/pokedex_api.log \
+            -v pokedex-data:/srv/api/data \
+            "$IMAGEN"
+      - name: Esperar a que arranque
+        run: |
+          for i in $(seq 1 30); do curl -fsS "$URL/health" && break; sleep 1; done
+          curl -fsS "$URL/health"
+          curl -fsS -o /dev/null "$URL/docs"
+      - name: Probar la API desplegada (con la PokeAPI real)
+        env:
+          CLAVE: ${{ secrets.HOMELAB_SMOKE_PASSWORD }}
+        run: |
+          set -e
+          USUARIO=ci-smoke
+          # Registro (201 la primera vez, 409 si ya existe: los dos valen).
+          codigo=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$URL/api/v1/auth/register" \
+            -H "Content-Type: application/json" \
+            -d "{\"username\":\"$USUARIO\",\"email\":\"$USUARIO@npcs-group.dev\",\"password\":\"$CLAVE\"}")
+          echo "registro: $codigo"; [ "$codigo" = 201 ] || [ "$codigo" = 409 ]
+          TOKEN=$(curl -fsS -X POST "$URL/api/v1/auth/login" \
+            --data-urlencode "username=$USUARIO" --data-urlencode "password=$CLAVE" | jq -r .access_token)
+          AUTH="Authorization: Bearer $TOKEN"
+          curl -fsS "$URL/api/v1/auth/me" -H "$AUTH" | jq -e '.username == "ci-smoke"' >/dev/null
+          curl -fsS "$URL/api/v1/pokemon/pikachu" -H "$AUTH" | jq -e '.id == 25' >/dev/null
+          curl -fsS "$URL/api/v1/pokemon/search?q=saur" -H "$AUTH" | jq -e '.count > 0' >/dev/null
+          curl -fsS "$URL/api/v1/pokemon/charizard/card" -H "$AUTH" -o /tmp/ficha-ci.pdf
+          head -c 4 /tmp/ficha-ci.pdf | grep -q "%PDF" && rm -f /tmp/ficha-ci.pdf
+          curl -fsS "$URL/api/v1/pokedex/stats" -H "$AUTH" | jq -e 'has("total_pokemon")' >/dev/null
+          echo "API desplegada y funcionando: http://192.168.1.245:$PUERTO/docs"
+      - name: Logs del contenedor si algo falla
+        if: failure()
+        run: docker logs --tail 100 "$CONTENEDOR" || true
+      - name: Borrar imágenes sin usar
+        if: always()
+        run: docker image prune -f
