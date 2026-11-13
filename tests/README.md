@@ -16,6 +16,7 @@ El CI exige **cobertura ≥ 80 %**. El enunciado pide **mínimo 15 tests**.
 | `test_auth.py` | Registro, login, token y usuario actual | 30 | #4 Miguel |
 | `test_pokedex.py` | CRUD, filtros, orden, paginación y propiedad | 41 | #7 Miguel |
 | `test_export.py` | Exportar a CSV y PDF: filtros, orden, sin paginar, inyección CSV, caracteres raros y 429 | 22 | #11 Miguel |
+| `test_api_v2.py` | API v2: forma de la respuesta, sobre de paginación, filtros, propiedad, que la v1 no cambia y 429 | 19 | #14 Miguel |
 | `test_pokeapi_service.py` | Servicio con mock: OK, errores, timeouts y logging | 31 | #5 Henar |
 | `test_pokemon.py` | Búsqueda (nombre, tipo, paginación, caché), detalle y ficha PDF, con la PokeAPI simulada | 37 | #8 Henar |
 | `test_logging.py` | Logging de peticiones, auth, 422 y 429; que no se filtren contraseñas ni tokens | 22 | #10 Henar |
@@ -25,7 +26,8 @@ El CI exige **cobertura ≥ 80 %**. El enunciado pide **mínimo 15 tests**.
 **Avance (11 nov, tarde):** tests de auth (#4, PR #28) y del CRUD de la Pokédex (#7, PR #29): 149 tests y 99 % de cobertura al integrar los dos.  
 **Avance (11 nov, noche):** búsqueda, detalle y ficha PDF (#8, PR #30): 186 tests y 99 % de cobertura.  
 **Avance (11 nov, noche):** equipo en PDF (#13, PR #32): 194 tests y 99 % de cobertura.  
-**Avance (11 nov, noche):** exportar la Pokédex a CSV y PDF (#11, PR #33): 216 tests y 99 % de cobertura.
+**Avance (11 nov, noche):** exportar la Pokédex a CSV y PDF (#11, PR #33): 216 tests y 99 % de cobertura.  
+**Avance (13 nov):** API v2 de ejemplo (#14): 235 tests y 99 % de cobertura.
 
 ## Fixtures de `conftest.py`
 | Fixture | Para qué |

@@ -96,5 +96,18 @@ WARNING pokedex_api.limites · [3c1d…] POST /api/v1/auth/login → 429 · lím
 
 El nivel se cambia con `LOG_LEVEL` en el `.env` (`DEBUG`, `INFO`, `WARNING` o `ERROR`).
 
+### Versionado de la API
+Las rutas llevan la versión en la URL (`/api/v1/...`, `/api/v2/...`). Como ejemplo, `/api/v2/pokedex` ofrece los mismos datos que la v1 con otro contrato:
+
+| | v1 (`GET /api/v1/pokedex`) | v2 (`GET /api/v2/pokedex`) |
+|---|---|---|
+| Respuesta del listado | Lista suelta de entradas | Sobre `{items, total, limit, offset, has_more}` |
+| Datos del Pokémon | `pokemon_id`, `pokemon_name`, `pokemon_sprite` sueltos | Agrupados en `pokemon: {id, name, sprite}` |
+| Captura | `is_captured`, `capture_date` | `captured`, `captured_at` |
+
+**¿Por qué una v2 y no cambiar la v1?** Estos cambios rompen a cualquier cliente que ya use la v1: esperaba una lista y ahora recibe un objeto, y los campos cambian de nombre. Con la versión en la URL, los clientes antiguos siguen funcionando con la v1 y los nuevos usan la v2 cuando quieran. El sobre resuelve una carencia real de la v1, que no dice cuántas entradas hay en total ni si quedan más páginas.
+
+**¿Cómo está hecha?** La v2 (`app/routers/pokedex_v2.py`) solo tiene lectura (listado y detalle) y reutiliza de la v1 los filtros, el orden y la comprobación de propiedad. Lo único que cambia es cómo se presenta la respuesta (`PokedexEntryV2` y `PokedexPageV2` en `app/models.py`), así que no hay lógica duplicada que pueda divergir. Escribir se sigue haciendo por la v1.
+
 ## Metodología
 Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado por otro miembro. Commits con Conventional Commits.

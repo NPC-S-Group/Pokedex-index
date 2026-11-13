@@ -212,3 +212,49 @@ class PokemonSearchPage(SQLModel):
     limit: int
     offset: int
     results: list[PokemonSummary]
+
+
+# ──────────────────────── API v2 (solo respuestas) ────────────────────────
+# La v2 cambia la forma de la respuesta, no las tablas: mismos datos, otro contrato.
+
+
+class PokemonResumenV2(SQLModel):
+    id: int
+    name: str
+    sprite: str | None
+
+
+class PokedexEntryV2(SQLModel):
+    id: int
+    pokemon: PokemonResumenV2
+    nickname: str | None
+    notes: str | None
+    captured: bool
+    captured_at: datetime | None
+    favorite: bool
+    created_at: datetime
+
+    @classmethod
+    def desde(cls, entrada: PokedexEntry) -> "PokedexEntryV2":
+        return cls(
+            id=entrada.id,
+            pokemon=PokemonResumenV2(
+                id=entrada.pokemon_id,
+                name=entrada.pokemon_name,
+                sprite=entrada.pokemon_sprite,
+            ),
+            nickname=entrada.nickname,
+            notes=entrada.notes,
+            captured=entrada.is_captured,
+            captured_at=entrada.capture_date,
+            favorite=entrada.favorite,
+            created_at=entrada.created_at,
+        )
+
+
+class PokedexPageV2(SQLModel):
+    items: list[PokedexEntryV2]
+    total: int  # entradas que cumplen los filtros, no sólo las de esta página
+    limit: int
+    offset: int
+    has_more: bool
