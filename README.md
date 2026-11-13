@@ -110,5 +110,7 @@ WARNING pokedex_api.limites · [3c1d…] POST /api/v1/auth/login → 429 · lím
 
 El nivel se cambia con `LOG_LEVEL` en el `.env` (`DEBUG`, `INFO`, `WARNING` o `ERROR`).
 
+**Dónde se guarda:** en la consola y, además, en `pokedex_api.log` (se cambia con `LOG_FILE`; vacío = solo consola). El archivo rota al llegar a 1 MB y guarda 3 copias, así que no crece sin límite. Está en `.gitignore` y `.dockerignore`: un log puede contener nombres de usuario e IPs, y no se sube.
+
 ## Metodología
 Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado por otro miembro. Commits con Conventional Commits.

@@ -22,7 +22,7 @@ from app.logs import (
 )
 from app.routers import auth, pokedex, pokemon, teams
 
-configurar_logging(settings.log_level)
+configurar_logging(settings.log_level, settings.log_file)
 logger = logging.getLogger("pokedex_api")
 
 
