@@ -11,7 +11,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 
 # Usuario sin privilegios: la API no corre como root dentro del contenedor
-RUN useradd --create-home api && chown -R api /srv/api
+# data/: base de datos y log cuando se monta un volumen (despliegue del homelab)
+RUN useradd --create-home api && mkdir -p /srv/api/data && chown -R api /srv/api
 USER api
 
 EXPOSE 8000

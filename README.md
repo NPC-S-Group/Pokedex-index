@@ -243,7 +243,12 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
 - **Pull requests:** todo entra en `develop` por PR revisado y aprobado por otro miembro. Las versiones pasan a `main` con un PR `develop → main`, una etiqueta y una release (`v0.5.0`, `v1.0.0`).
 - **Tablero:** issues por tarea en un GitHub Project con columnas Por hacer / En curso / Hecho, fechas (vista Roadmap) e hitos.
 - **CI** (`.github/workflows/ci.yml`): en cada push y PR a `main` o `develop`, tests con cobertura mínima del 80 % en GitHub y, si `HOMELAB_RUNNER=true`, construcción de la imagen Docker y prueba de arranque en un runner propio.
-- **Despliegue:** la imagen Docker está lista y probada en el CI. No se ha desplegado en una plataforma pública (ver *Mejoras futuras*).
+- **Despliegue continuo (homelab):** cada vez que cambia `main` y pasan los tests, el trabajo `deploy-homelab` del CI construye la imagen en el runner propio, sustituye el contenedor en marcha y **prueba la API desplegada** contra la PokeAPI real: registro y login, `/auth/me`, detalle y búsqueda de Pokémon, ficha PDF y estadísticas. Si algo falla, el CI sale en rojo y muestra los logs del contenedor.
+  - URL (red del homelab o VPN): <http://192.168.1.245:8000/docs>
+  - Se activa con la variable del repo `HOMELAB_DEPLOY=true`. La clave real va en el secreto `HOMELAB_SECRET_KEY` y la contraseña del usuario de prueba (`ci-smoke`) en `HOMELAB_SMOKE_PASSWORD`, nunca en el código.
+  - La base de datos y el log viven en un volumen Docker (`pokedex-data`), así que sobreviven a cada despliegue.
+  - Se puede relanzar a mano desde *Actions → CI → Run workflow* sobre `main`.
+  - Pendiente: una URL pública en Render (ver *Mejoras futuras*).
 
 ## Otras decisiones de diseño
 - **404 y no 403 con lo ajeno:** si una entrada o un equipo es de otro usuario, respondemos como si no existiera, para no confirmar qué ids hay.
