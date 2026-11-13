@@ -360,7 +360,7 @@ def test_borrar_inexistente(client, auth_headers):
 
 
 # ───────────────────────────── /stats básico ─────────────────────────────
-# Las estadísticas ampliadas (tipo más común, racha) son de la #12.
+# Las estadísticas ampliadas (tipo más común, racha) están en test_stats.py (#12).
 
 
 def test_stats_vacia(client, auth_headers):
@@ -371,6 +371,8 @@ def test_stats_vacia(client, auth_headers):
         "captured": 0,
         "favorites": 0,
         "completion_percentage": 0.0,
+        "most_common_type": None,
+        "capture_streak_days": 0,
     }
 
 
@@ -386,4 +388,9 @@ def test_stats_cuenta_solo_lo_mio(
         "captured": 2,
         "favorites": 1,
         "completion_percentage": 66.7,
+        # 1 bulbasaur (grass, poison), 4 charmander (fire), 7 squirtle (water):
+        # empate a 1, gana el primero por orden alfabético.
+        "most_common_type": "fire",
+        # add_to_pokedex no pone capture_date: sin fechas no hay racha.
+        "capture_streak_days": 0,
     }

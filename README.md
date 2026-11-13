@@ -73,6 +73,20 @@ Solo se aceptan los orígenes de `CORS_ORIGINS` (por defecto `http://localhost:5
 
 **Ficha en PDF:** se genera con `fpdf2`, en memoria, sin guardar archivos. La imagen se descarga solo del repositorio oficial de sprites (`raw.githubusercontent.com`, por HTTPS y como mucho 2 MB): así la API no puede usarse para descargar cosas de otros sitios. Si la imagen falla, la ficha sale igual con el hueco «Sin imagen».
 
+### Estadísticas de la Pokédex
+`GET /api/v1/pokedex/stats` devuelve:
+
+```json
+{
+  "total_pokemon": 4, "captured": 2, "favorites": 0, "completion_percentage": 50.0,
+  "most_common_type": "normal", "capture_streak_days": 2
+}
+```
+
+- **`most_common_type`:** el tipo que más se repite en toda tu Pokédex (capturados o no). Un Pokémon de dos tipos cuenta para los dos. Si hay empate, gana el primero por orden alfabético, para que el resultado no cambie según el orden de las filas. Con la Pokédex vacía, `null`.
+- **`capture_streak_days`:** días seguidos, hasta hoy, en los que capturaste al menos un Pokémon. Si hoy aún no has capturado nada, la racha sigue viva desde ayer y solo se rompe cuando pasa un día entero sin capturas. Los días se cuentan en UTC.
+- **Tipos guardados:** al añadir un Pokémon se guardan sus tipos (`pokemon_types`) junto al nombre y la imagen. Así `/stats` no llama a la PokeAPI. Las bases de datos creadas antes reciben la columna nueva al arrancar (`app/database.py`), sin borrar nada; sus entradas antiguas no tienen tipos y no cuentan para el tipo más común.
+
 ### Logging
 Todo lo importante queda en el log (`app/logs.py`), separado por tipo para poder filtrarlo:
 
