@@ -24,8 +24,6 @@ petición → logging → rate limiting → CORS → endpoint (router)
 ```
 
 ## Avance
-- **10 nov:** base del hito 4 (#2), resto de archivos iniciales, equipos (#6) y rate limiting con CORS (#9).
-- **11 nov:** cliente de PokeAPI (#5) y logging completo (#10), de Henar; auth con `GET /auth/me` y sus tests (#4, PR #28) y tests del CRUD de la Pokédex con el fix de `capture_date` (#7, PR #29), de Miguel; búsqueda y ficha PDF (#8, Henar); equipo en PDF (#13, Jorge).
-- **13 nov:** API v2 de ejemplo de la Pokédex (#14, Miguel).
+El estado de cada tarea está en el [tablero del proyecto](https://github.com/orgs/NPC-S-Group/projects/1) y en los [hitos](https://github.com/NPC-S-Group/Pokedex-index/milestones). Lo que trae cada versión, en las [releases](https://github.com/NPC-S-Group/Pokedex-index/releases).
 
 Leyenda: ✅ hecho · 🟡 a medias · ❌ falta
