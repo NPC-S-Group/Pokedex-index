@@ -16,9 +16,11 @@ Nunca se registran contraseñas, tokens, cuerpos de petición ni query strings.
 """
 
 import logging
+import os
 import re
 import time
 import uuid
+from logging.handlers import RotatingFileHandler
 
 from fastapi import Request
 from fastapi.exception_handlers import request_validation_exception_handler
@@ -40,9 +42,25 @@ CABECERA_ID = "X-Request-ID"
 _ID_VALIDO = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 
 
-def configurar_logging(nivel: str = "INFO") -> None:
+def configurar_logging(nivel: str = "INFO", archivo: str | None = None) -> None:
+    """Consola siempre; además, si se indica, un archivo que rota (1 MB, 3 copias)."""
     logging.basicConfig(level=nivel, format=FORMATO)
-    logging.getLogger("pokedex_api").setLevel(nivel)
+    logger_api = logging.getLogger("pokedex_api")
+    logger_api.setLevel(nivel)
+    if not archivo:
+        return
+    ruta = os.path.abspath(archivo)
+    # Si ya escribe en ese archivo (p. ej. al recargar), no añadimos otro manejador.
+    if any(
+        isinstance(h, RotatingFileHandler) and h.baseFilename == ruta
+        for h in logger_api.handlers
+    ):
+        return
+    manejador = RotatingFileHandler(
+        ruta, maxBytes=1_000_000, backupCount=3, encoding="utf-8"
+    )
+    manejador.setFormatter(logging.Formatter(FORMATO))
+    logger_api.addHandler(manejador)
 
 
 def _id_peticion(request: Request) -> str:

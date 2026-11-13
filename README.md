@@ -35,6 +35,7 @@ Copia `.env.example` como `.env` y rellena los valores:
 | `CORS_ORIGINS` | Orígenes permitidos para CORS, como lista JSON (por defecto `["http://localhost:5173"]`) |
 | `POKEAPI_TIMEOUT` | Opcional. Segundos de espera a la PokeAPI antes de responder 504 (por defecto 5) |
 | `LOG_LEVEL` | Opcional. Nivel de log: `DEBUG`, `INFO`, `WARNING` o `ERROR` (por defecto `INFO`) |
+| `LOG_FILE` | Opcional. Archivo de log además de la consola (por defecto `pokedex_api.log`; vacío = solo consola) |
 
 ## Ejecución
 **En local** (con el `.env` configurado):
@@ -169,6 +170,8 @@ WARNING pokedex_api.limites · [3c1d…] POST /api/v1/auth/login → 429 · lím
 **Id de petición:** cada respuesta lleva la cabecera `X-Request-ID`, y el mismo id aparece en todas las líneas de esa petición. Si el cliente manda su propio id (solo letras, números y guiones), se reutiliza.
 
 El nivel se cambia con `LOG_LEVEL` en el `.env` (`DEBUG`, `INFO`, `WARNING` o `ERROR`).
+
+**Dónde se guarda:** en la consola y, además, en `pokedex_api.log` (se cambia con `LOG_FILE`; vacío = solo consola). El archivo rota al llegar a 1 MB y guarda 3 copias, así que no crece sin límite. Está en `.gitignore` y `.dockerignore`: un log puede contener nombres de usuario e IPs, y no se sube.
 
 ### Versionado de la API
 Las rutas llevan la versión en la URL (`/api/v1/...`, `/api/v2/...`). Como ejemplo, `/api/v2/pokedex` ofrece los mismos datos que la v1 con otro contrato:

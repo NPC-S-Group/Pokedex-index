@@ -7,3 +7,5 @@ htmlcov/
 .git/
 .github/
 tests/
+*.log
+*.log.*

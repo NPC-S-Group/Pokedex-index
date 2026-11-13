@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     pokeapi_base_url: str = "https://pokeapi.co/api/v2"
     pokeapi_timeout: float = 5.0  # segundos; si se supera, la API responde 504
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    # Archivo de log además de la consola. Vacío ("") = solo consola.
+    log_file: str | None = "pokedex_api.log"
     cors_origins: list[str] = ["http://localhost:5173"]
 
 
