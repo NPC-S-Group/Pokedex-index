@@ -1,5 +1,6 @@
 """CRUD de la Pokédex personal: cada usuario sólo ve y toca lo suyo."""
 
+from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
@@ -18,9 +19,11 @@ from app.models import (
     PokedexEntryCreate,
     PokedexEntryRead,
     PokedexEntryUpdate,
+    PokedexStats,
     TeamMember,
     ahora,
 )
+from app.services.estadisticas import racha_de_capturas, tipo_mas_comun
 from app.services.export_service import pokedex_a_csv, pokedex_a_pdf
 
 router = APIRouter(prefix="/pokedex", tags=["pokedex"])
@@ -57,6 +60,7 @@ async def anadir(
         owner_id=usuario.id,
         pokemon_name=info["name"],
         pokemon_sprite=info["sprite"],
+        pokemon_types=info.get("types") or [],
         capture_date=ahora() if datos.is_captured else None,
     )
     session.add(entrada)
@@ -153,7 +157,7 @@ def _contar(session, *condiciones) -> int:
 
 
 # /stats va ANTES que /{entry_id}: si no, FastAPI intentaría leer "stats" como un id.
-@router.get("/stats")
+@router.get("/stats", response_model=PokedexStats)
 @limiter.limit(LIMITE_AUTENTICADO)
 def estadisticas(request: Request, usuario: CurrentUser, session: SessionDep):
     mias = PokedexEntry.owner_id == usuario.id
@@ -161,11 +165,19 @@ def estadisticas(request: Request, usuario: CurrentUser, session: SessionDep):
     capturados = _contar(session, mias, PokedexEntry.is_captured)
     favoritos = _contar(session, mias, PokedexEntry.favorite)
     porcentaje = round(100 * capturados / total, 1) if total else 0.0
+
+    # Solo las dos columnas que hacen falta, no las entradas enteras.
+    tipos = session.exec(select(PokedexEntry.pokemon_types).where(mias)).all()
+    fechas = session.exec(
+        select(PokedexEntry.capture_date).where(mias, PokedexEntry.is_captured)
+    ).all()
     return {
         "total_pokemon": total,
         "captured": capturados,
         "favorites": favoritos,
         "completion_percentage": porcentaje,
+        "most_common_type": tipo_mas_comun(tipos),
+        "capture_streak_days": racha_de_capturas(fechas, datetime.now(UTC).date()),
     }
 
 
