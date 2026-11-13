@@ -11,6 +11,8 @@ Si encuentras una vulnerabilidad, **no abras una issue pública**. Escribe direc
 | Contraseñas débiles | Mínimo 8 caracteres, con al menos una mayúscula y un número | `UserCreate` en `app/models.py` |
 | Suplantación | JWT firmados (HS256) con caducidad de 24 h. Sin `SECRET_KEY` la app no arranca | `app/auth.py`, `app/config.py` |
 | Enumeración de usuarios | El mismo error para usuario inexistente y contraseña incorrecta | `app/routers/auth.py` |
+| Token de una cuenta borrada o desactivada | Cada petición busca al usuario por el `user_id` del token y comprueba `is_active`. Todos los fallos del token responden el mismo `401`, sin decir cuál ha fallado | `app/dependencies.py` |
+| Cuentas o entradas duplicadas por peticiones simultáneas | Restricciones `UNIQUE` en la base de datos (usuario, email, Pokémon por usuario). Si salta una, se deshace la transacción y se responde 409 | `app/models.py`, routers `auth`, `pokedex` |
 | Acceso a datos ajenos | Cada consulta filtra por el usuario del token. Lo ajeno responde 404, sin confirmar que existe | routers `pokedex`, `teams` |
 | Fuerza bruta y abuso | Rate limiting: registro 5/h, login 10/min, PokeAPI 30/min, export 10/min, resto 100/min | `app/limits.py` |
 | Inyección SQL | Consultas con SQLModel/SQLAlchemy parametrizadas. El orden (`sort`) sale de una lista cerrada | `app/routers/pokedex.py` |
@@ -22,7 +24,8 @@ Si encuentras una vulnerabilidad, **no abras una issue pública**. Escribe direc
 | Peticiones a otros sitios desde el servidor (SSRF) | Las imágenes de las fichas en PDF solo se descargan de `raw.githubusercontent.com`, por HTTPS y hasta 2 MB. Se compara el host exacto: `raw.githubusercontent.com.evil.com` se rechaza | `app/services/pokeapi_service.py` |
 | Datos sensibles en los logs | No se registran contraseñas, tokens, cuerpos de petición ni query strings. En los 422 solo se guarda qué campo falla, nunca el valor enviado | `app/logs.py` |
 | Falsear líneas del log (log injection) | Los nombres de usuario se escriben con `%r`, con los saltos de línea escapados. Un `X-Request-ID` del cliente solo se reutiliza si son letras, números y guiones | `app/logs.py`, `app/routers/auth.py` |
-| Inyección en la cabecera de descarga | El nombre del fichero de la ficha se limpia antes de ponerlo en `Content-Disposition` | `app/routers/pokemon.py` |
+| Inyección en la cabecera de descarga | El nombre del fichero de la ficha se limpia antes de ponerlo en `Content-Disposition`. La exportación de la Pokédex usa un nombre fijo (`pokedex.csv` o `pokedex.pdf`) | `app/routers/pokemon.py`, `app/routers/pokedex.py` |
+| Fórmulas en el CSV exportado (CSV injection) | Las celdas que empiezan por `=`, `+`, `-`, `@`, tabulador o retorno de carro llevan una comilla delante, para que Excel o LibreOffice no las ejecuten al abrir el fichero | `app/services/export_service.py` |
 | Ficheros en el servidor | Los PDF se generan en memoria y se envían sin escribir nada en disco | `app/services/ficha_pdf.py` |
 
 ## Gestión de secretos
