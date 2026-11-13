@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 from pydantic import EmailStr, field_validator
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import JSON, Column, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -68,6 +68,11 @@ class PokedexEntry(PokedexEntryBase, table=True):
     pokemon_id: int = Field(index=True)
     pokemon_name: str
     pokemon_sprite: str | None = None
+    # Tipos del Pokémon ("fire", "flying"…), copiados de la PokeAPI al añadirlo:
+    # así /stats calcula el tipo más común sin llamar fuera. Lista en JSON.
+    pokemon_types: list[str] = Field(
+        default_factory=list, sa_column=Column(JSON, nullable=False, default=list)
+    )
     capture_date: datetime | None = None
     created_at: datetime = Field(default_factory=ahora)
 
@@ -84,8 +89,18 @@ class PokedexEntryRead(PokedexEntryBase):
     pokemon_id: int
     pokemon_name: str
     pokemon_sprite: str | None
+    pokemon_types: list[str] = []
     capture_date: datetime | None
     created_at: datetime
+
+
+class PokedexStats(SQLModel):
+    total_pokemon: int
+    captured: int
+    favorites: int
+    completion_percentage: float  # % de tu Pokédex que está capturado
+    most_common_type: str | None  # None si la Pokédex está vacía
+    capture_streak_days: int  # días seguidos con alguna captura, hasta hoy o ayer
 
 
 class PokedexEntryUpdate(SQLModel):
