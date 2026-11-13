@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 from pydantic import EmailStr, field_validator
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import JSON, Column, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -68,6 +68,11 @@ class PokedexEntry(PokedexEntryBase, table=True):
     pokemon_id: int = Field(index=True)
     pokemon_name: str
     pokemon_sprite: str | None = None
+    # Tipos del Pokémon ("fire", "flying"…), copiados de la PokeAPI al añadirlo:
+    # así /stats calcula el tipo más común sin llamar fuera. Lista en JSON.
+    pokemon_types: list[str] = Field(
+        default_factory=list, sa_column=Column(JSON, nullable=False, default=list)
+    )
     capture_date: datetime | None = None
     created_at: datetime = Field(default_factory=ahora)
 
@@ -84,8 +89,18 @@ class PokedexEntryRead(PokedexEntryBase):
     pokemon_id: int
     pokemon_name: str
     pokemon_sprite: str | None
+    pokemon_types: list[str] = []
     capture_date: datetime | None
     created_at: datetime
+
+
+class PokedexStats(SQLModel):
+    total_pokemon: int
+    captured: int
+    favorites: int
+    completion_percentage: float  # % de tu Pokédex que está capturado
+    most_common_type: str | None  # None si la Pokédex está vacía
+    capture_streak_days: int  # días seguidos con alguna captura, hasta hoy o ayer
 
 
 class PokedexEntryUpdate(SQLModel):
@@ -212,3 +227,49 @@ class PokemonSearchPage(SQLModel):
     limit: int
     offset: int
     results: list[PokemonSummary]
+
+
+# ──────────────────────── API v2 (solo respuestas) ────────────────────────
+# La v2 cambia la forma de la respuesta, no las tablas: mismos datos, otro contrato.
+
+
+class PokemonResumenV2(SQLModel):
+    id: int
+    name: str
+    sprite: str | None
+
+
+class PokedexEntryV2(SQLModel):
+    id: int
+    pokemon: PokemonResumenV2
+    nickname: str | None
+    notes: str | None
+    captured: bool
+    captured_at: datetime | None
+    favorite: bool
+    created_at: datetime
+
+    @classmethod
+    def desde(cls, entrada: PokedexEntry) -> "PokedexEntryV2":
+        return cls(
+            id=entrada.id,
+            pokemon=PokemonResumenV2(
+                id=entrada.pokemon_id,
+                name=entrada.pokemon_name,
+                sprite=entrada.pokemon_sprite,
+            ),
+            nickname=entrada.nickname,
+            notes=entrada.notes,
+            captured=entrada.is_captured,
+            captured_at=entrada.capture_date,
+            favorite=entrada.favorite,
+            created_at=entrada.created_at,
+        )
+
+
+class PokedexPageV2(SQLModel):
+    items: list[PokedexEntryV2]
+    total: int  # entradas que cumplen los filtros, no sólo las de esta página
+    limit: int
+    offset: int
+    has_more: bool

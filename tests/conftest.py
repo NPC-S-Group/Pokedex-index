@@ -143,13 +143,13 @@ def add_to_pokedex(session):
     def _anadir(usuario: User, *pokemon_ids: int, **campos) -> list[PokedexEntry]:
         entradas = []
         for pid in pokemon_ids:
-            nombre = POKEMON_FALSOS.get(pid, (f"pokemon-{pid}", []))[0]
+            nombre, tipos = POKEMON_FALSOS.get(pid, (f"pokemon-{pid}", []))
             entrada = PokedexEntry(
                 owner_id=usuario.id,
                 pokemon_id=pid,
                 pokemon_name=nombre,
                 pokemon_sprite=f"https://sprites.test/{pid}.png",
-                **campos,
+                **{"pokemon_types": tipos, **campos},
             )
             session.add(entrada)
             entradas.append(entrada)

@@ -20,9 +20,9 @@ from app.logs import (
     registrar_limite_superado,
     registrar_peticiones,
 )
-from app.routers import auth, pokedex, pokemon, teams
+from app.routers import auth, pokedex, pokedex_v2, pokemon, teams
 
-configurar_logging(settings.log_level)
+configurar_logging(settings.log_level, settings.log_file)
 logger = logging.getLogger("pokedex_api")
 
 
@@ -62,6 +62,9 @@ app.middleware("http")(registrar_peticiones)
 
 for modulo in (auth, pokemon, pokedex, teams):
     app.include_router(modulo.router, prefix="/api/v1")
+
+# API v2 de ejemplo (#14): convive con la v1, que no cambia.
+app.include_router(pokedex_v2.router, prefix="/api/v2")
 
 
 @app.get("/health", tags=["sistema"])
