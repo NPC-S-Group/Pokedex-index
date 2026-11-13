@@ -56,7 +56,7 @@ pytest --cov=app --cov-report=term-missing
 ```
 
 ## Endpoints
-Todos bajo `/api/v1` salvo `/health`. 🔒 = requiere `Authorization: Bearer <token>`.
+Todos bajo `/api/v1` salvo `/health` y la v2 de ejemplo (`/api/v2`, ver *Versionado de la API*). 🔒 = requiere `Authorization: Bearer <token>`.
 
 | Método | Ruta | Qué hace | Límite |
 |---|---|---|---|
@@ -74,6 +74,8 @@ Todos bajo `/api/v1` salvo `/health`. 🔒 = requiere `Authorization: Bearer <to
 | GET · POST 🔒 | `/teams` | Lista tus equipos · crea uno (1 a 6 Pokémon de tu Pokédex) | 100/min |
 | GET · PUT · DELETE 🔒 | `/teams/{team_id}` | Detalle, reemplazo completo y borrado | 100/min |
 | GET 🔒 | `/teams/{team_id}/export` | Equipo en PDF: estadísticas combinadas y fichas | 30/min |
+| GET 🔒 | `/api/v2/pokedex?captured=&favorite=&sort=&order=&limit=&offset=` | Pokédex en un sobre con `total` y `has_more` (v2) | 100/min |
+| GET 🔒 | `/api/v2/pokedex/{entry_id}` | Detalle de una entrada propia (v2) | 100/min |
 | GET | `/health` | Estado de la API | — |
 
 Errores comunes: `401` sin token o token inválido · `404` no existe o es de otro usuario · `409` duplicado · `422` datos no válidos · `429` límite superado · `502/504` la PokeAPI falla o no responde.
@@ -87,8 +89,8 @@ Cada endpoint tiene su límite (`app/limits.py`), contado por IP con `slowapi`:
 |---|---|---|
 | Públicos | `POST /auth/register` | 5 por hora |
 | | `POST /auth/login` | 10 por minuto |
-| Llaman a la PokeAPI | `GET /pokemon/{id}`, `POST /pokedex` | 30 por minuto |
-| Exportar | `GET /pokedex/export` (CSV o PDF) | 10 por minuto |
+| Llaman a la PokeAPI | `GET /pokemon/search`, `GET /pokemon/{id}`, `GET /pokemon/{id}/card` (PDF), `POST /pokedex`, `GET /teams/{id}/export` (PDF) | 30 por minuto |
+| Exportar la Pokédex | `GET /pokedex/export` (CSV o PDF, sin llamar a la PokeAPI) | 10 por minuto |
 | Autenticados | `GET /auth/me`, resto de `/pokedex` y `/teams` | 100 por minuto |
 | Sistema | `GET /health` | sin límite |
 
@@ -170,6 +172,66 @@ WARNING pokedex_api.limites · [3c1d…] POST /api/v1/auth/login → 429 · lím
 
 El nivel se cambia con `LOG_LEVEL` en el `.env` (`DEBUG`, `INFO`, `WARNING` o `ERROR`).
 
+### Autenticación
+Registro con `POST /auth/register`, login con `POST /auth/login` (formulario OAuth2, para que funcione el botón **Authorize** de Swagger) y `GET /auth/me` para saber quién es el dueño del token.
+
+| Paso | Qué hace la API |
+|---|---|
+| Registro | Valida usuario (3 a 50 caracteres), email y contraseña (mínimo 8, con una mayúscula y un número). Guarda solo el hash `bcrypt` y responde `201` con el usuario, nunca con la contraseña |
+| Login | Comprueba la contraseña con `bcrypt` y devuelve un JWT `{"access_token", "token_type": "bearer"}` |
+| Cada petición protegida | Lee el token, comprueba la firma y la caducidad y busca al usuario por el `user_id` del token |
+
+**¿Qué lleva el token?** `sub` (nombre de usuario), `user_id`, `iat` y `exp`. Caduca a las 24 horas (`access_token_expire_minutes`). Con el token se busca al usuario por su `user_id` (la clave primaria), no por el nombre.
+
+**¿Cuándo da 401?** Sin token, con un token inventado, firmado con otra clave, caducado o sin `user_id`, y también si el usuario ya no existe o está desactivado (`is_active = False`). Si llega un token y falla cualquiera de estas comprobaciones, la respuesta es siempre la misma, `Credenciales no válidas`: quien prueba tokens no sabe cuál ha fallado.
+
+**¿Y si dos personas se registran a la vez con el mismo nombre?** La comprobación previa no basta, porque las dos peticiones pueden pasarla antes de que la otra guarde. Por eso `username` y `email` son `UNIQUE` en la base de datos: si salta la restricción, se deshace la transacción y se responde `409`, no `500`. Lo mismo pasa al añadir dos veces el mismo Pokémon a la Pokédex.
+
+### Pokédex personal
+Cada entrada guarda el id, el nombre, la imagen y los tipos del Pokémon, más los datos del usuario: mote, notas, si está capturado, si es favorito y la fecha de captura.
+
+- **Añadir (`POST`):** solo se manda el `pokemon_id` (1 a 1025) y los datos propios. El nombre, la imagen y los tipos se piden a la PokeAPI, así que no se pueden inventar, y un id que no existe responde `404`. El mismo Pokémon no puede estar dos veces en la Pokédex de un usuario (`409`), aunque sí en la de usuarios distintos.
+- **Listar (`GET`):** filtros `captured` y `favorite`, que se pueden combinar; orden por `pokemon_id`, `pokemon_name` o `capture_date`, ascendente o descendente; paginación con `limit` (1 a 100, 20 por defecto) y `offset`. Un `sort` que no está en la lista responde `422`.
+- **Editar (`PATCH`):** solo cambia los campos que llegan. Las demás columnas (`pokemon_id`, `owner_id`…) no se pueden tocar aunque se envíen.
+- **Borrar (`DELETE`):** responde `204` y saca al Pokémon de los equipos en los que estuviera, para no dejar miembros que apunten a una entrada que ya no existe.
+
+**¿Cómo se gestiona la fecha de captura?** La API la mantiene coherente con `is_captured` para que el cliente no tenga que hacerlo:
+
+| Petición | Resultado |
+|---|---|
+| Añadir con `is_captured: true` | `capture_date` = ahora |
+| `PATCH {"is_captured": true}` | Si no tenía fecha, ahora; si ya la tenía, se conserva |
+| `PATCH {"is_captured": true, "capture_date": "..."}` | La fecha enviada (por ejemplo, para registrar una captura antigua) |
+| `PATCH {"is_captured": false}` | `capture_date` = `null` |
+
+**¿Y si la fecha llega sin zona horaria?** Una fecha como `"2026-01-15T10:00:00"` se interpreta como UTC. Antes, la base de datos la rechazaba y la API respondía `500`: lo detectaron los tests y se corrigió en `PokedexEntryUpdate`.
+
+### Exportar la Pokédex
+`GET /api/v1/pokedex/export?format=csv|pdf` descarga la Pokédex con los mismos filtros y el mismo orden que el listado, pero sin paginar: todo lo que cumpla los filtros. El listado y la exportación usan la misma consulta (`_consulta_filtrada`), así que lo que se ve es lo que se descarga.
+
+| | CSV | PDF |
+|---|---|---|
+| Contenido | Una fila por entrada: id, nombre, mote, capturado, favorito, fecha y notas | Cabecera con el usuario, la fecha, los filtros y los totales, y una tabla con los mismos datos |
+| Detalles | UTF-8 con BOM, para que Excel muestre bien las tildes. Las comas, comillas y saltos de línea van entrecomillados | En horizontal, la tabla salta de página y el texto largo se ajusta. Lo que no cabe en Latin-1 (emojis) sale como `?` |
+| Descarga | `pokedex.csv` | `pokedex.pdf` |
+
+**¿Por qué el CSV protege las celdas?** El mote y las notas los escribe el usuario. Si una celda empieza por `=`, `+`, `-` o `@`, Excel y LibreOffice la ejecutan como fórmula al abrir el fichero (inyección CSV), y una fórmula puede, por ejemplo, abrir un enlace. Por eso a esas celdas se les pone una comilla delante: se ven como texto y no se ejecutan. En el PDF no hay fórmulas y el texto sale tal cual.
+
+**¿Por qué un límite propio de 10/min?** Exportar recorre toda la Pokédex y genera el fichero en memoria, así que cuesta más que un GET normal, y nadie necesita más de unas pocas descargas por minuto. A diferencia de la ficha o del PDF del equipo, no llama a la PokeAPI: todo sale de nuestra base de datos.
+
+### Versionado de la API
+Las rutas llevan la versión en la URL (`/api/v1/...`, `/api/v2/...`). Como ejemplo, `/api/v2/pokedex` ofrece los mismos datos que la v1 con otro contrato:
+
+| | v1 (`GET /api/v1/pokedex`) | v2 (`GET /api/v2/pokedex`) |
+|---|---|---|
+| Respuesta del listado | Lista suelta de entradas | Sobre `{items, total, limit, offset, has_more}` |
+| Datos del Pokémon | `pokemon_id`, `pokemon_name`, `pokemon_sprite` sueltos | Agrupados en `pokemon: {id, name, sprite}` |
+| Captura | `is_captured`, `capture_date` | `captured`, `captured_at` |
+
+**¿Por qué una v2 y no cambiar la v1?** Estos cambios rompen a cualquier cliente que ya use la v1: esperaba una lista y ahora recibe un objeto, y los campos cambian de nombre. Con la versión en la URL, los clientes antiguos siguen funcionando con la v1 y los nuevos usan la v2 cuando quieran. El sobre resuelve una carencia real de la v1, que no dice cuántas entradas hay en total ni si quedan más páginas.
+
+**¿Cómo está hecha?** La v2 (`app/routers/pokedex_v2.py`) solo tiene lectura (listado y detalle) y reutiliza de la v1 los filtros, el orden y la comprobación de propiedad. Lo único que cambia es cómo se presenta la respuesta (`PokedexEntryV2` y `PokedexPageV2` en `app/models.py`), así que no hay lógica duplicada que pueda divergir. Escribir se sigue haciendo por la v1.
+
 ## Metodología
 Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado por otro miembro. Commits con Conventional Commits.
 
@@ -192,6 +254,8 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
 - **Contraseñas** con `bcrypt` (sal por usuario). Nunca se devuelven ni se registran en los logs.
 - **JWT** firmados con HS256 y `SECRET_KEY`, con caducidad de 24 horas. Sin `SECRET_KEY` la aplicación no arranca: no hay clave por defecto.
 - **Login sin pistas:** el mismo mensaje para "no existe el usuario" y "contraseña incorrecta".
+- **Tokens de cuentas borradas o desactivadas:** cada petición comprueba que el usuario del token sigue existiendo y está activo; si no, `401`.
+- **Exportación CSV sin fórmulas:** las celdas que escribe el usuario y empiezan por `=`, `+`, `-` o `@` se neutralizan para que Excel no las ejecute (inyección CSV).
 - **Validación de entrada** con Pydantic (longitudes, rangos, contraseña robusta, máximo 6 por equipo). Los identificadores de Pokémon se validan antes de llamar fuera, y el orden (`sort`) se traduce a columna con una lista cerrada, nunca se pega en el SQL.
 - **Rate limiting** por tipo de endpoint y **CORS** limitado a los orígenes de `CORS_ORIGINS`.
 - **Secretos fuera del repo:** `.env` en `.gitignore` y `.dockerignore`. El CI usa claves de prueba.

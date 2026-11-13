@@ -1,6 +1,6 @@
 # `app/routers/` · endpoints
 
-Un archivo por grupo de endpoints. Todos se registran en `main.py` con el prefijo `/api/v1`.
+Un archivo por grupo de endpoints. Todos se registran en `main.py` con el prefijo `/api/v1`, salvo `pokedex_v2.py`, que va bajo `/api/v2`.
 
 | Archivo | Endpoints | Límite | Estado | Tarea |
 |---|---|---|---|---|
@@ -9,6 +9,7 @@ Un archivo por grupo de endpoints. Todos se registran en `main.py` con el prefij
 | `pokedex.py` | `POST`, `GET` (filtros, orden y paginación), `GET /{id}`, `PATCH`, `DELETE` | 30/min (POST), 100/min | ✅ código · ✅ tests | #7 Miguel |
 | | `GET /pokedex/stats`: total, capturados, favoritos, %, `most_common_type` y `capture_streak_days` | 100/min | ✅ con tests (100 %) | #12 Henar |
 | | `GET /pokedex/export?format=csv\|pdf` con los filtros y el orden del listado | 10/min | ✅ código · ✅ tests | #11 Miguel |
+| `pokedex_v2.py` | `GET /api/v2/pokedex` (sobre con `total` y `has_more`), `GET /api/v2/pokedex/{id}` | 100/min | ✅ código · ✅ tests | #14 Miguel |
 | `teams.py` | `POST`, `GET`, `GET /{id}`, `PUT`, `DELETE` | 100/min | ✅ con tests (100 %) | #6 Jorge |
 | | `GET /teams/{id}/export` (PDF) | 30/min | ✅ con tests (100 %) | #13 Jorge |
 
