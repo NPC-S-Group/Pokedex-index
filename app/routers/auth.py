@@ -18,6 +18,14 @@ logger = logging.getLogger("pokedex_api.auth")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+# Mensaje único para cualquier fallo del login: no dice si falla el usuario o la clave.
+LOGIN_INCORRECTO = "Usuario o contraseña incorrectos"
+
+# Hash de una contraseña que nadie tiene. Si el usuario no existe, se compara con este
+# para que bcrypt tarde lo mismo: sin esto, «no existe» respondía en ~9 ms y
+# «contraseña mala» en ~250 ms, y el tiempo delataba qué usuarios hay.
+_HASH_FALSO = hash_password("usuario-que-no-existe-" + "x" * 16)
+
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 @limiter.limit(LIMITE_REGISTRO)
@@ -65,12 +73,15 @@ def login(
     session: SessionDep,
 ):
     usuario = session.exec(select(User).where(User.username == form.username)).first()
-    # Mismo mensaje para «no existe» y «contraseña mala»: no regalamos qué usuarios hay.
-    if usuario is None or not verify_password(form.password, usuario.hashed_password):
+    # bcrypt se ejecuta SIEMPRE, exista o no el usuario: mismo mensaje y mismo tiempo.
+    hash_guardado = usuario.hashed_password if usuario else _HASH_FALSO
+    clave_correcta = verify_password(form.password, hash_guardado)
+    # Una cuenta desactivada recibe el mismo error: ni tokens ni pistas.
+    if usuario is None or not clave_correcta or not usuario.is_active:
         logger.warning("login fallido para %r", form.username)
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
-            "Usuario o contraseña incorrectos",
+            LOGIN_INCORRECTO,
             headers={"WWW-Authenticate": "Bearer"},
         )
     logger.info("login correcto: %r (id=%s)", usuario.username, usuario.id)

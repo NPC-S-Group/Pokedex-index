@@ -186,6 +186,8 @@ Registro con `POST /auth/register`, login con `POST /auth/login` (formulario OAu
 
 **¿Qué lleva el token?** `sub` (nombre de usuario), `user_id`, `iat` y `exp`. Caduca a las 24 horas (`access_token_expire_minutes`). Con el token se busca al usuario por su `user_id` (la clave primaria), no por el nombre.
 
+**¿Qué responde un login fallido?** Siempre lo mismo, falle lo que falle: `401` con `{"detail": "Usuario o contraseña incorrectos"}` y la cabecera `WWW-Authenticate: Bearer`. Ni el código, ni el mensaje, ni las cabeceras, ni el tiempo de respuesta dicen si el error está en el usuario, en la contraseña o en que la cuenta está desactivada (ver *Decisiones de Seguridad*).
+
 **¿Cuándo da 401?** Sin token, con un token inventado, firmado con otra clave, caducado o sin `user_id`, y también si el usuario ya no existe o está desactivado (`is_active = False`). Si llega un token y falla cualquiera de estas comprobaciones, la respuesta es siempre la misma, `Credenciales no válidas`: quien prueba tokens no sabe cuál ha fallado.
 
 **¿Y si dos personas se registran a la vez con el mismo nombre?** La comprobación previa no basta, porque las dos peticiones pueden pasarla antes de que la otra guarde. Por eso `username` y `email` son `UNIQUE` en la base de datos: si salta la restricción, se deshace la transacción y se responde `409`, no `500`. Lo mismo pasa al añadir dos veces el mismo Pokémon a la Pokédex.
@@ -261,7 +263,7 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
 ## Decisiones de Seguridad
 - **Contraseñas** con `bcrypt` (sal por usuario). Nunca se devuelven ni se registran en los logs.
 - **JWT** firmados con HS256 y `SECRET_KEY`, con caducidad de 24 horas. Sin `SECRET_KEY` la aplicación no arranca: no hay clave por defecto.
-- **Login sin pistas:** el mismo mensaje para "no existe el usuario" y "contraseña incorrecta".
+- **Login sin pistas:** el mismo código (`401`), el mismo mensaje («Usuario o contraseña incorrectos») y **el mismo tiempo de respuesta** si no existe el usuario, si la contraseña es incorrecta o si la cuenta está desactivada. El tiempo también cuenta: antes, «no existe» respondía en ~9 ms y «contraseña mala» en ~250 ms, porque solo en el segundo caso se ejecutaba `bcrypt`, y con un cronómetro se podía averiguar qué usuarios existen. Ahora `bcrypt` se ejecuta siempre (con un hash falso si el usuario no existe) y los dos casos tardan lo mismo.
 - **Tokens de cuentas borradas o desactivadas:** cada petición comprueba que el usuario del token sigue existiendo y está activo; si no, `401`.
 - **Exportación CSV sin fórmulas:** las celdas que escribe el usuario y empiezan por `=`, `+`, `-` o `@` se neutralizan para que Excel no las ejecute (inyección CSV).
 - **Validación de entrada** con Pydantic (longitudes, rangos, contraseña robusta, máximo 6 por equipo). Los identificadores de Pokémon se validan antes de llamar fuera, y el orden (`sort`) se traduce a columna con una lista cerrada, nunca se pega en el SQL.
