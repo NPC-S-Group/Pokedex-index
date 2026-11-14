@@ -58,6 +58,38 @@ La imagen corre con un usuario sin privilegios y no incluye `.env` ni bases de d
 pytest --cov=app --cov-report=term-missing
 ```
 
+### Prueba de humo del despliegue
+```bash
+python scripts/prueba_humo.py                         # contra la API desplegada en Render
+python scripts/prueba_humo.py http://localhost:8000   # contra la API en local
+```
+
+**¿Para qué sirve?** Recorre la API **ya publicada** como lo haría un usuario real y comprueba unas 50 cosas:
+- registro y login;
+- búsqueda, detalle y ficha con la PokeAPI real;
+- la Pokédex con sus filtros, estadísticas y exportación a CSV y PDF;
+- la v2 y los equipos;
+- que un usuario no ve lo de otro, y CORS.
+
+Al terminar borra lo que ha creado. Solo quedan dos usuarios con nombre aleatorio, porque la API no permite borrar usuarios.
+
+**¿Por qué, si ya hay tests?** Porque prueban cosas distintas:
+
+| | Tests de `pytest` | Prueba de humo |
+|---|---|---|
+| Qué prueban | El **código** | El **despliegue** |
+| Base de datos | En memoria, nueva en cada test | La real del servidor |
+| PokeAPI | Falsa, con datos fijos | La real, por internet |
+| Qué detectan | Errores de lógica | Una variable que falta en Render, un puerto mal configurado, una versión que no ha llegado a desplegarse o la PokeAPI respondiendo distinto |
+
+Los dos hacen falta: `pytest` puede pasar entero y que la API publicada no funcione.
+
+**¿Cuándo se usa?**
+- **Automáticamente, después de cada despliegue en Render.** El trabajo `deploy-render` del CI espera a que `/health` devuelva el commit recién fusionado (Render lo pone en `RENDER_GIT_COMMIT`), es decir, a que ya se sirve la versión nueva y no la anterior, y lanza la prueba. Si algo falla, el CI sale en rojo.
+- **A mano**, antes de la entrega, de la defensa o del vídeo, o si algo parece roto.
+
+**¿Cuándo la hemos usado?** Por primera vez el 14 de noviembre de 2026, justo después del primer despliegue en Render. Dio **48 de 49** comprobaciones correctas. La que falló demostró su utilidad: las cabeceras de deprecación de la v1 (PR #46) aún no estaban en `main`, y por tanto tampoco en Render, aunque `pytest` pasaba entero en `develop`. Desde entonces, el script solo comprueba esas cabeceras si la versión desplegada ya las incluye.
+
 ## Endpoints
 Todos bajo `/api/v1` salvo `/health` y la v2 de ejemplo (`/api/v2`, ver *Versionado de la API*). 🔒 = requiere `Authorization: Bearer <token>`.
 
@@ -79,7 +111,7 @@ Todos bajo `/api/v1` salvo `/health` y la v2 de ejemplo (`/api/v2`, ver *Version
 | GET 🔒 | `/teams/{team_id}/export` | Equipo en PDF: estadísticas combinadas y fichas | 30/min |
 | GET 🔒 | `/api/v2/pokedex?captured=&favorite=&sort=&order=&limit=&offset=` | Pokédex en un sobre con `total` y `has_more` (v2) | 100/min |
 | GET 🔒 | `/api/v2/pokedex/{entry_id}` | Detalle de una entrada propia (v2) | 100/min |
-| GET | `/health` | Estado de la API | — |
+| GET | `/health` | Estado de la API (en Render, también el commit desplegado) | — |
 
 Errores comunes: `401` sin token o token inválido · `404` no existe o es de otro usuario · `409` duplicado · `422` datos no válidos · `429` límite superado · `502/504` la PokeAPI falla o no responde.
 
@@ -255,6 +287,7 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
   - El *Auto-Deploy* de Render está apagado: si no, desplegaría cada commit de `main` aunque los tests fallaran. Así, lo que llega a producción siempre ha pasado por revisión y por el CI.
   - La URL del hook está en el secreto `RENDER_DEPLOY_HOOK_URL` (quien la tenga puede lanzar despliegues). `SECRET_KEY` la generó Render y solo está en su panel, junto con `PORT=8000`. Ninguna de las dos está en el código.
   - Render comprueba `/health` antes de dar por bueno cada despliegue: si la nueva versión no arranca, sigue sirviendo la anterior.
+  - Después, el CI espera a que Render sirva el commit nuevo y lanza la **prueba de humo** contra la URL pública (ver *Tests → Prueba de humo del despliegue*).
   - Se puede relanzar a mano desde *Actions → CI → Run workflow* sobre `main`.
   - Limitaciones del plan gratuito: se duerme tras 15 minutos sin peticiones (la siguiente tarda unos 50 segundos en despertar) y el disco no es permanente, así que la base de datos SQLite se vacía en cada despliegue o reinicio. Para datos permanentes haría falta PostgreSQL (ver *Mejoras futuras*).
 
