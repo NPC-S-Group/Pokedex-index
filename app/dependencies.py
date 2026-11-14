@@ -33,6 +33,10 @@ def get_current_user(
     if payload is None or "user_id" not in payload:
         logger_auth.warning("token no válido o caducado")
         raise no_autorizado
+    # Un refresh token no sirve para entrar: solo para pedir un par nuevo.
+    if payload.get("type", "access") != "access":
+        logger_auth.warning("se intentó usar un refresh token como access token")
+        raise no_autorizado
     usuario = session.get(User, payload["user_id"])
     if usuario is None or not usuario.is_active:
         logger_auth.warning(

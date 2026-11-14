@@ -48,6 +48,28 @@ class UserRead(UserBase):
     created_at: datetime
 
 
+class RefreshToken(SQLModel, table=True):
+    """Refresh tokens emitidos. La caducidad la marca el propio JWT (exp); aquí solo
+    se guarda si existe y si está anulado (revoked_at), porque un JWT no se puede
+    «desfirmar»: para anularlo hace falta guardarlo en algún sitio."""
+
+    jti: str = Field(primary_key=True, max_length=32)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    expires_at: datetime
+    created_at: datetime = Field(default_factory=ahora)
+    revoked_at: datetime | None = None
+
+
+class TokenPair(SQLModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
+class RefreshRequest(SQLModel):
+    refresh_token: str = Field(min_length=1, max_length=2000)
+
+
 # ───────────────────────────── Pokédex ─────────────────────────────
 
 

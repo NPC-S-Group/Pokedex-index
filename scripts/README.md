@@ -4,7 +4,7 @@ No forman parte de la aplicación: no se copian en la imagen Docker ni cuentan p
 
 | Archivo | Qué hace | Cuándo se usa | Tarea |
 |---|---|---|---|
-| `prueba_humo.py` | Prueba de humo de la API **desplegada**: registro y login, PokeAPI real, Pokédex, estadísticas, exportar, v2, equipos, aislamiento entre usuarios y CORS (unas 50 comprobaciones). Borra lo que crea | Automáticamente en el CI después de cada despliegue en Render (trabajo `deploy-render`) y a mano antes de la entrega o de la defensa | #15 Miguel |
+| `prueba_humo.py` | Prueba de humo de la API **desplegada**: registro y login, refresh tokens, PokeAPI real, Pokédex, estadísticas, exportar, v2, equipos, aislamiento entre usuarios y CORS (unas 50 comprobaciones). Borra lo que crea | Automáticamente en el CI después de cada despliegue en Render (trabajo `deploy-render`) y a mano antes de la entrega o de la defensa | #15 Miguel |
 
 ## Uso
 ```bash

@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     secret_key: str
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24
+    refresh_token_expire_days: int = 7  # bonus del enunciado (2.2)
     pokeapi_base_url: str = "https://pokeapi.co/api/v2"
     pokeapi_timeout: float = 5.0  # segundos; si se supera, la API responde 504
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"

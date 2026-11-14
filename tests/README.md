@@ -14,6 +14,7 @@ El CI exige **cobertura ≥ 80 %**. El enunciado pide **mínimo 15 tests**.
 | `test_teams_export.py` | Equipo en PDF: páginas, cabeceras, propiedad, imágenes y estadísticas combinadas | 8 | #13 |
 | `test_rate_limit_cors.py` | 429 de cada nivel y CORS | 8 | #9 |
 | `test_auth.py` | Registro, login, token y usuario actual | 30 | #4 Miguel |
+| `test_refresh.py` | Refresh tokens: par en el login, rotación, reutilización, tipos separados, caducidad, logout y 429 | 27 | mejora de #4 Miguel |
 | `test_pokedex.py` | CRUD, filtros, orden, paginación y propiedad | 41 | #7 Miguel |
 | `test_stats.py` | `/stats`: tipo más común (empates, doble tipo), racha (huecos, hoy o ayer, zona horaria), tipos guardados y la columna nueva en una BD antigua | 26 | #12 Henar |
 | `test_export.py` | Exportar a CSV y PDF: filtros, orden, sin paginar, inyección CSV, caracteres raros y 429 | 22 | #11 Miguel |

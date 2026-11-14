@@ -10,6 +10,7 @@ Si encuentras una vulnerabilidad, **no abras una issue pública**. Escribe direc
 | Robo de contraseñas | Hash con `bcrypt` y sal por usuario. Nunca se devuelven ni aparecen en los logs | `app/auth.py`, `app/logs.py` |
 | Contraseñas débiles | Mínimo 8 caracteres, con al menos una mayúscula y un número | `UserCreate` en `app/models.py` |
 | Suplantación | JWT firmados (HS256) con caducidad de 24 h. Sin `SECRET_KEY` la app no arranca | `app/auth.py`, `app/config.py` |
+| Robo de un refresh token | Duran 7 días y son de un solo uso (rotación). Si se reutiliza uno ya usado, se anulan todos los de la cuenta. El logout lo anula. Un refresh token no sirve para entrar, ni un access token para renovar | `app/routers/auth.py`, `app/dependencies.py` |
 | Enumeración de usuarios | El mismo error (401, mismo mensaje y mismas cabeceras) para usuario inexistente, contraseña incorrecta y cuenta desactivada. Además, el mismo tiempo de respuesta: `bcrypt` se ejecuta siempre, con un hash falso si el usuario no existe, para que un atacante no pueda distinguir los casos con un cronómetro (timing attack). Lo comprueban tests en `tests/test_auth.py` | `app/routers/auth.py` |
 | Token de una cuenta borrada o desactivada | Cada petición busca al usuario por el `user_id` del token y comprueba `is_active`. Todos los fallos del token responden el mismo `401`, sin decir cuál ha fallado | `app/dependencies.py` |
 | Cuentas o entradas duplicadas por peticiones simultáneas | Restricciones `UNIQUE` en la base de datos (usuario, email, Pokémon por usuario). Si salta una, se deshace la transacción y se responde 409 | `app/models.py`, routers `auth`, `pokedex` |
@@ -36,7 +37,8 @@ Si encuentras una vulnerabilidad, **no abras una issue pública**. Escribe direc
 
 ## Limitaciones conocidas
 - **El registro sí revela si un usuario o email ya existe** (`409`). Es inevitable si se quiere avisar al usuario de que elija otro nombre; lo frena el límite de 5 registros por hora por IP.
-- **Los tokens no se pueden revocar** antes de que caduquen: cerrar sesión solo borra el token en el cliente.
+- **El access token no se puede anular** antes de que caduque (máximo 24 h): el logout anula el refresh token, pero el access token sigue valiendo hasta su caducidad y el cliente debe borrarlo.
+- **La tabla de refresh tokens crece** con cada login y renovación: los caducados no se borran todavía (ver *Mejoras futuras* en el README).
 - **El rate limiting es por IP y en memoria:** se reinicia al reiniciar la app, no se comparte entre varias instancias y varios usuarios detrás de la misma IP comparten límite.
 - **SQLite** es para desarrollo y la práctica. En producción convendría PostgreSQL.
 - **La caché de la búsqueda de Pokémon** (24 h) está en memoria: se pierde al reiniciar y no se comparte entre varias instancias.

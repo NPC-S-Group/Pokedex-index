@@ -8,8 +8,8 @@ Paquete principal de la Pokédex API (FastAPI + SQLModel).
 | `logs.py` | Middleware de logging de peticiones y registro de 422 y 429 (ver «Logging» en el README) | ✅ (#10) |
 | `config.py` | Lee `.env` en un objeto `Settings` validado. Sin `SECRET_KEY` la app no arranca | ✅ |
 | `database.py` | Motor de la BD y una sesión por petición (`get_session`) | ✅ |
-| `models.py` | Tablas (`User`, `PokedexEntry`, `Team`, `TeamMember`) y esquemas de entrada y salida (`*Create`, `*Read`, `*Update`, y `*V2` de la API v2) | ✅ |
-| `auth.py` | Hash de contraseñas con bcrypt y creación y lectura de JWT | ✅ (#4) |
+| `models.py` | Tablas (`User`, `RefreshToken`, `PokedexEntry`, `Team`, `TeamMember`) y esquemas de entrada y salida (`*Create`, `*Read`, `*Update`, y `*V2` de la API v2) | ✅ |
+| `auth.py` | Hash de contraseñas con bcrypt y creación y lectura de JWT: access token (24 h) y refresh token (7 días) | ✅ (#4) |
 | `dependencies.py` | Dependencias comunes: `SessionDep`, `CurrentUser` (usuario del token) y `ServicioPokeAPI` | ✅ |
 | `limits.py` | Limitador de slowapi y los cuatro niveles de límite | ✅ (#9) |
 | `versionado.py` | Deprecación de las rutas de la v1 con sucesora en la v2: cabeceras `Deprecation`, `Sunset` y `Link`, log de cada uso y `410 Gone` desde la fecha de retirada | ✅ (mejora de #14) |

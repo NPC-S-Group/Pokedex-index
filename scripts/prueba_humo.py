@@ -99,6 +99,21 @@ def main(base: str) -> int:
         c.get("/api/v1/auth/me", headers=falso).status_code == 401,
     )
 
+    # --- Refresh tokens (solo si la versión desplegada ya los tiene) --------------
+    if "/api/v1/auth/refresh" in rutas:
+        r = c.post("/api/v1/auth/login", data={"username": a, "password": clave})
+        refresh = r.json().get("refresh_token", "")
+        check("login devuelve refresh token", refresh, r.text)
+        r = c.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
+        check("refresh -> par nuevo", r.status_code == 200, r.text)
+        nuevo = r.json().get("refresh_token", "")
+        r = c.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
+        check("refresh ya usado -> 401 (rotación)", r.status_code == 401, r.text)
+        r = c.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {nuevo}"})
+        check("un refresh token no sirve para entrar", r.status_code == 401)
+        r = c.post("/api/v1/auth/logout", json={"refresh_token": nuevo})
+        check("logout -> 204", r.status_code == 204, r.text)
+
     # --- PokeAPI real ----------------------------------------------------------------
     r = c.get("/api/v1/pokemon/pikachu", headers=ha)
     check(
