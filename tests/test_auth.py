@@ -232,3 +232,75 @@ def test_registro_simultaneo_lo_resuelve_la_bd(client, session, monkeypatch):
 
     monkeypatch.setattr(session, "commit", commit_que_falla)
     assert _registrar(client).status_code == 409
+
+
+# ───────────────────────────── Login sin pistas ─────────────────────────────
+
+
+def _intento(client, username, password):
+    return client.post(LOGIN, data={"username": username, "password": password})
+
+
+def test_login_mismo_error_sea_cual_sea_el_fallo(client, session, test_user):
+    # Ni el código, ni el mensaje, ni las cabeceras dicen si falla el usuario o la clave.
+    inactivo = User(
+        username="misty",
+        email="misty@test.com",
+        hashed_password=hash_password(PASSWORD),
+        is_active=False,
+    )
+    session.add(inactivo)
+    session.commit()
+    casos = {
+        "usuario no existe": ("nadie", PASSWORD),
+        "contraseña mala": (test_user.username, "Mala12345"),
+        "los dos mal": ("nadie", "Mala12345"),
+        "mayúsculas en el usuario": (test_user.username.upper(), PASSWORD),
+        "cuenta desactivada": ("misty", PASSWORD),
+    }
+    respuestas = {nombre: _intento(client, *datos) for nombre, datos in casos.items()}
+    for nombre, r in respuestas.items():
+        assert r.status_code == 401, nombre
+        assert r.json() == {"detail": "Usuario o contraseña incorrectos"}, nombre
+        assert r.headers["www-authenticate"] == "Bearer", nombre
+        assert "access_token" not in r.text, nombre
+
+
+def test_login_ejecuta_bcrypt_aunque_el_usuario_no_exista(
+    client, test_user, monkeypatch
+):
+    # Si no se comprobara la clave cuando el usuario no existe, la respuesta llegaría
+    # mucho antes y el tiempo delataría qué usuarios hay (timing attack).
+    from app.routers import auth as router_auth
+
+    llamadas = []
+    original = router_auth.verify_password
+
+    def espia(password, hashed):
+        llamadas.append(hashed)
+        return original(password, hashed)
+
+    monkeypatch.setattr(router_auth, "verify_password", espia)
+    _intento(client, "nadie", PASSWORD)
+    _intento(client, test_user.username, "Mala12345")
+    assert len(llamadas) == 2
+    assert llamadas[0] == router_auth._HASH_FALSO
+    assert llamadas[1] == test_user.hashed_password
+
+
+def test_login_tarda_lo_mismo_exista_o_no_el_usuario(client, test_user):
+    # Antes: ~9 ms si el usuario no existía y ~250 ms si existía. Margen amplio para
+    # que no falle por ruido en el CI: solo tiene que pillar diferencias de 3 veces.
+    import statistics
+    import time
+
+    def mediana(username):
+        tiempos = []
+        for _ in range(5):
+            inicio = time.perf_counter()
+            _intento(client, username, "Mala12345")
+            tiempos.append(time.perf_counter() - inicio)
+        return statistics.median(tiempos)
+
+    no_existe, existe = mediana("nadie"), mediana(test_user.username)
+    assert 1 / 3 < no_existe / existe < 3, (no_existe, existe)
