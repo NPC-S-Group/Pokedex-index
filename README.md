@@ -4,6 +4,8 @@
 
 API REST con FastAPI que consume PokeAPI y permite a cada usuario gestionar su Pokédex y sus equipos de batalla. Práctica 1 de Sistemas de Información (UFV).
 
+**API desplegada:** <https://pokedex-api-wrok.onrender.com> · documentación (Swagger): <https://pokedex-api-wrok.onrender.com/docs>. En el plan gratuito de Render se duerme tras 15 minutos sin uso: la primera petición puede tardar unos 50 segundos.
+
 ## Descripción
 Cada usuario se registra, inicia sesión con un token JWT y gestiona su propia Pokédex: busca Pokémon en la [PokeAPI](https://pokeapi.co), los añade, marca cuáles ha capturado y cuáles son favoritos, consulta sus estadísticas y la exporta en CSV o PDF. También puede montar equipos de batalla de hasta 6 Pokémon de su Pokédex y descargarlos en PDF, con la ficha de cada uno y las estadísticas combinadas del equipo.
 
@@ -248,7 +250,13 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
   - Se activa con la variable del repo `HOMELAB_DEPLOY=true`. La clave real va en el secreto `HOMELAB_SECRET_KEY` y la contraseña del usuario de prueba (`ci-smoke`) en `HOMELAB_SMOKE_PASSWORD`, nunca en el código.
   - La base de datos y el log viven en un volumen Docker (`pokedex-data`), así que sobreviven a cada despliegue.
   - Se puede relanzar a mano desde *Actions → CI → Run workflow* sobre `main`.
-  - Pendiente: una URL pública en Render (ver *Mejoras futuras*).
+- **Despliegue público (Render):** <https://pokedex-api-wrok.onrender.com/docs>
+  - Cada vez que cambia `main` y pasan los tests, el trabajo `deploy-render` del CI llama al *deploy hook* de Render, que construye la imagen con el mismo `Dockerfile` y la publica. Nunca se despliega desde `develop` ni desde una rama `features/`.
+  - El *Auto-Deploy* de Render está apagado: si no, desplegaría cada commit de `main` aunque los tests fallaran. Así, lo que llega a producción siempre ha pasado por revisión y por el CI.
+  - La URL del hook está en el secreto `RENDER_DEPLOY_HOOK_URL` (quien la tenga puede lanzar despliegues). `SECRET_KEY` la generó Render y solo está en su panel, junto con `PORT=8000`. Ninguna de las dos está en el código.
+  - Render comprueba `/health` antes de dar por bueno cada despliegue: si la nueva versión no arranca, sigue sirviendo la anterior.
+  - Se puede relanzar a mano desde *Actions → CI → Run workflow* sobre `main`.
+  - Limitaciones del plan gratuito: se duerme tras 15 minutos sin peticiones (la siguiente tarda unos 50 segundos en despertar) y el disco no es permanente, así que la base de datos SQLite se vacía en cada despliegue o reinicio. Para datos permanentes haría falta PostgreSQL (ver *Mejoras futuras*).
 
 ## Otras decisiones de diseño
 - **404 y no 403 con lo ajeno:** si una entrada o un equipo es de otro usuario, respondemos como si no existiera, para no confirmar qué ids hay.
@@ -268,12 +276,13 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
 - **Rate limiting** por tipo de endpoint y **CORS** limitado a los orígenes de `CORS_ORIGINS`.
 - **Secretos fuera del repo:** `.env` en `.gitignore` y `.dockerignore`. El CI usa claves de prueba.
 - **Contenedor** con usuario sin privilegios.
+- **HTTPS en producción:** el token viaja en cada petición, y por HTTP cualquiera en la misma red podría leerlo y suplantar al usuario. El despliegue de Render sirve la API solo por HTTPS, con certificado automático. En local (`localhost`) basta HTTP.
 - **Imágenes de las fichas** solo desde `raw.githubusercontent.com`, por HTTPS y hasta 2 MB: la API no se puede usar para hacer peticiones a otros sitios (SSRF).
 - **Logs sin datos sensibles:** ni contraseñas, ni tokens, ni cuerpos de petición, ni query strings. Los nombres de usuario se escapan para que nadie pueda inventar líneas en el log.
 - Detalle y limitaciones conocidas en [`SECURITY.md`](SECURITY.md).
 
 ## Mejoras Futuras
-- Desplegar la imagen en una plataforma (Render, Railway o Fly.io) con PostgreSQL.
+- PostgreSQL en el despliegue de Render, para que los datos sobrevivan a cada despliegue (ahora es SQLite en un disco temporal).
 - Revocar tokens (lista de bloqueo o tokens de refresco cortos).
 - Rate limiting por usuario y con almacenamiento compartido (Redis), en lugar de por IP y en memoria.
 - Migraciones de base de datos con Alembic.
