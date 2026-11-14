@@ -12,6 +12,7 @@ Paquete principal de la Pokédex API (FastAPI + SQLModel).
 | `auth.py` | Hash de contraseñas con bcrypt y creación y lectura de JWT: access token (24 h) y refresh token (7 días) | ✅ (#4) |
 | `dependencies.py` | Dependencias comunes: `SessionDep`, `CurrentUser` (usuario del token) y `ServicioPokeAPI` | ✅ |
 | `limits.py` | Limitador de slowapi y los cuatro niveles de límite | ✅ (#9) |
+| `versionado.py` | Deprecación de las rutas de la v1 con sucesora en la v2: cabeceras `Deprecation`, `Sunset` y `Link`, log de cada uso y `410 Gone` desde la fecha de retirada | ✅ (mejora de #14) |
 | `routers/` | Endpoints, un archivo por grupo ([ver README](routers/README.md)) | 🟡 |
 | `services/` | Clientes de servicios externos ([ver README](services/README.md)) | 🟡 |
 

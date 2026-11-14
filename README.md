@@ -4,6 +4,8 @@
 
 API REST con FastAPI que consume PokeAPI y permite a cada usuario gestionar su Pokédex y sus equipos de batalla. Práctica 1 de Sistemas de Información (UFV).
 
+**API desplegada:** <https://pokedex-api-wrok.onrender.com> · documentación (Swagger): <https://pokedex-api-wrok.onrender.com/docs>. En el plan gratuito de Render se duerme tras 15 minutos sin uso: la primera petición puede tardar unos 50 segundos.
+
 ## Descripción
 Cada usuario se registra, inicia sesión con un token JWT y gestiona su propia Pokédex: busca Pokémon en la [PokeAPI](https://pokeapi.co), los añade, marca cuáles ha capturado y cuáles son favoritos, consulta sus estadísticas y la exporta en CSV o PDF. También puede montar equipos de batalla de hasta 6 Pokémon de su Pokédex y descargarlos en PDF, con la ficha de cada uno y las estadísticas combinadas del equipo.
 
@@ -56,6 +58,38 @@ La imagen corre con un usuario sin privilegios y no incluye `.env` ni bases de d
 pytest --cov=app --cov-report=term-missing
 ```
 
+### Prueba de humo del despliegue
+```bash
+python scripts/prueba_humo.py                         # contra la API desplegada en Render
+python scripts/prueba_humo.py http://localhost:8000   # contra la API en local
+```
+
+**¿Para qué sirve?** Recorre la API **ya publicada** como lo haría un usuario real y comprueba unas 50 cosas:
+- registro y login;
+- búsqueda, detalle y ficha con la PokeAPI real;
+- la Pokédex con sus filtros, estadísticas y exportación a CSV y PDF;
+- la v2 y los equipos;
+- que un usuario no ve lo de otro, y CORS.
+
+Al terminar borra lo que ha creado. Solo quedan dos usuarios con nombre aleatorio, porque la API no permite borrar usuarios.
+
+**¿Por qué, si ya hay tests?** Porque prueban cosas distintas:
+
+| | Tests de `pytest` | Prueba de humo |
+|---|---|---|
+| Qué prueban | El **código** | El **despliegue** |
+| Base de datos | En memoria, nueva en cada test | La real del servidor |
+| PokeAPI | Falsa, con datos fijos | La real, por internet |
+| Qué detectan | Errores de lógica | Una variable que falta en Render, un puerto mal configurado, una versión que no ha llegado a desplegarse o la PokeAPI respondiendo distinto |
+
+Los dos hacen falta: `pytest` puede pasar entero y que la API publicada no funcione.
+
+**¿Cuándo se usa?**
+- **Automáticamente, después de cada despliegue en Render.** El trabajo `deploy-render` del CI espera a que `/health` devuelva el commit recién fusionado (Render lo pone en `RENDER_GIT_COMMIT`), es decir, a que ya se sirve la versión nueva y no la anterior, y lanza la prueba. Si algo falla, el CI sale en rojo.
+- **A mano**, antes de la entrega, de la defensa o del vídeo, o si algo parece roto.
+
+**¿Cuándo la hemos usado?** Por primera vez el 14 de noviembre de 2026, justo después del primer despliegue en Render. Dio **48 de 49** comprobaciones correctas. La que falló demostró su utilidad: las cabeceras de deprecación de la v1 (PR #46) aún no estaban en `main`, y por tanto tampoco en Render, aunque `pytest` pasaba entero en `develop`. Desde entonces, el script solo comprueba esas cabeceras si la versión desplegada ya las incluye.
+
 ## Endpoints
 Todos bajo `/api/v1` salvo `/health` y la v2 de ejemplo (`/api/v2`, ver *Versionado de la API*). 🔒 = requiere `Authorization: Bearer <token>`.
 
@@ -70,16 +104,16 @@ Todos bajo `/api/v1` salvo `/health` y la v2 de ejemplo (`/api/v2`, ver *Version
 | GET 🔒 | `/pokemon/{id_or_name}` | Detalle: tipos, habilidades, sprites y estadísticas | 30/min |
 | GET 🔒 | `/pokemon/{id_or_name}/card` | Ficha del Pokémon en PDF | 30/min |
 | POST 🔒 | `/pokedex` | Añade un Pokémon (valida que exista; sin duplicados) | 30/min |
-| GET 🔒 | `/pokedex?captured=&favorite=&sort=&order=&limit=&offset=` | Lista tu Pokédex | 100/min |
+| GET 🔒 | `/pokedex?captured=&favorite=&sort=&order=&limit=&offset=` | Lista tu Pokédex. **Obsoleta:** usa la v2 (ver *Versionado*) | 100/min |
 | GET 🔒 | `/pokedex/stats` | Total, capturados, favoritos, % completado, tipo más común y racha | 100/min |
 | GET 🔒 | `/pokedex/export?format=csv\|pdf` | Exporta la Pokédex con los mismos filtros | 10/min |
-| GET · PATCH · DELETE 🔒 | `/pokedex/{entry_id}` | Detalle, actualización parcial y borrado de una entrada propia | 100/min |
+| GET · PATCH · DELETE 🔒 | `/pokedex/{entry_id}` | Detalle (**obsoleto:** usa la v2), actualización parcial y borrado de una entrada propia | 100/min |
 | GET · POST 🔒 | `/teams` | Lista tus equipos · crea uno (1 a 6 Pokémon de tu Pokédex) | 100/min |
 | GET · PUT · DELETE 🔒 | `/teams/{team_id}` | Detalle, reemplazo completo y borrado | 100/min |
 | GET 🔒 | `/teams/{team_id}/export` | Equipo en PDF: estadísticas combinadas y fichas | 30/min |
 | GET 🔒 | `/api/v2/pokedex?captured=&favorite=&sort=&order=&limit=&offset=` | Pokédex en un sobre con `total` y `has_more` (v2) | 100/min |
 | GET 🔒 | `/api/v2/pokedex/{entry_id}` | Detalle de una entrada propia (v2) | 100/min |
-| GET | `/health` | Estado de la API | — |
+| GET | `/health` | Estado de la API (en Render, también el commit desplegado) | — |
 
 Errores comunes: `401` sin token o token inválido · `404` no existe o es de otro usuario · `409` duplicado · `422` datos no válidos · `429` límite superado · `502/504` la PokeAPI falla o no responde.
 
@@ -248,7 +282,31 @@ Las rutas llevan la versión en la URL (`/api/v1/...`, `/api/v2/...`). Como ejem
 | Datos del Pokémon | `pokemon_id`, `pokemon_name`, `pokemon_sprite` sueltos | Agrupados en `pokemon: {id, name, sprite}` |
 | Captura | `is_captured`, `capture_date` | `captured`, `captured_at` |
 
-**¿Por qué una v2 y no cambiar la v1?** Estos cambios rompen a cualquier cliente que ya use la v1: esperaba una lista y ahora recibe un objeto, y los campos cambian de nombre. Con la versión en la URL, los clientes antiguos siguen funcionando con la v1 y los nuevos usan la v2 cuando quieran. El sobre resuelve una carencia real de la v1, que no dice cuántas entradas hay en total ni si quedan más páginas.
+**¿Por qué es importante versionar?** Una API tiene clientes que no controlamos: una web, una app móvil o un script de otra persona. Si cambiamos la forma de una respuesta sin avisar, esos clientes dejan de funcionar de un día para otro. Con la versión en la URL, cada cliente elige cuándo migrar: los antiguos siguen usando la v1 y los nuevos usan la v2. Así la API puede evolucionar sin romper a nadie.
+
+**¿Qué cambios justifican una nueva versión?** Solo los que rompen a un cliente que ya existe:
+
+| Necesitan versión nueva (rompen) | No la necesitan (compatibles) |
+|---|---|
+| Quitar o renombrar un campo (`is_captured` → `captured`) | Añadir un campo nuevo a la respuesta |
+| Cambiar la estructura (lista → objeto con `items`) o el tipo de un campo | Añadir un endpoint nuevo |
+| Hacer obligatorio un parámetro que era opcional | Añadir un parámetro opcional con valor por defecto |
+| Cambiar el significado de un valor o de un código de respuesta | Corregir un error sin cambiar el contrato |
+
+La v2 de la Pokédex existe por los tres primeros casos de la izquierda. Su sobre, además, resuelve una carencia real de la v1: no dice cuántas entradas hay en total ni si quedan más páginas.
+
+**¿Cuál es la estrategia de deprecación?** Una versión antigua no se borra de golpe: se anuncia, convive con la nueva y se retira en una fecha conocida.
+
+1. **Anunciar.** Cuando una ruta de la v1 tiene sucesora en la v2, se marca obsoleta (`app/versionado.py`). Ahora mismo lo están el listado y el detalle de la Pokédex. Cada respuesta lo avisa con cabeceras estándar, y en Swagger (`/docs`) aparecen tachadas:
+   ```http
+   Deprecation: @1794614400
+   Sunset: Wed, 30 Jun 2027 00:00:00 GMT
+   Link: </api/v2/pokedex>; rel="successor-version"
+   ```
+   `Deprecation` (RFC 9745) dice desde cuándo está obsoleta, `Sunset` (RFC 8594) cuándo se retira y `Link` dónde está la sucesora. CORS las expone para que también las pueda leer una web de otro origen.
+2. **Convivir.** La ruta obsoleta sigue funcionando exactamente igual al menos 6 meses (del 14 de noviembre de 2026 al 30 de junio de 2027), y la v2 reutiliza su lógica, así que las dos dan los mismos datos.
+3. **Medir.** Cada uso de una ruta obsoleta queda en el log (`pokedex_api.versionado`). Antes de retirarla se comprueba que ya casi nadie la usa y, si hace falta, se avisa a quien la sigue usando.
+4. **Retirar.** Desde la fecha de `Sunset`, la ruta responde automáticamente `410 Gone`, con un mensaje y la cabecera `Link` que apuntan a la v2: no hace falta acordarse de borrarla ese día. La v1 se mantiene entera mientras tenga rutas sin sucesora: escribir, `/stats` y `/export` solo existen en la v1 y no están obsoletas.
 
 **¿Cómo está hecha?** La v2 (`app/routers/pokedex_v2.py`) solo tiene lectura (listado y detalle) y reutiliza de la v1 los filtros, el orden y la comprobación de propiedad. Lo único que cambia es cómo se presenta la respuesta (`PokedexEntryV2` y `PokedexPageV2` en `app/models.py`), así que no hay lógica duplicada que pueda divergir. Escribir se sigue haciendo por la v1.
 
@@ -265,7 +323,14 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
   - Se activa con la variable del repo `HOMELAB_DEPLOY=true`. La clave real va en el secreto `HOMELAB_SECRET_KEY` y la contraseña del usuario de prueba (`ci-smoke`) en `HOMELAB_SMOKE_PASSWORD`, nunca en el código.
   - La base de datos y el log viven en un volumen Docker (`pokedex-data`), así que sobreviven a cada despliegue.
   - Se puede relanzar a mano desde *Actions → CI → Run workflow* sobre `main`.
-  - Pendiente: una URL pública en Render (ver *Mejoras futuras*).
+- **Despliegue público (Render):** <https://pokedex-api-wrok.onrender.com/docs>
+  - Cada vez que cambia `main` y pasan los tests, el trabajo `deploy-render` del CI llama al *deploy hook* de Render, que construye la imagen con el mismo `Dockerfile` y la publica. Nunca se despliega desde `develop` ni desde una rama `features/`.
+  - El *Auto-Deploy* de Render está apagado: si no, desplegaría cada commit de `main` aunque los tests fallaran. Así, lo que llega a producción siempre ha pasado por revisión y por el CI.
+  - La URL del hook está en el secreto `RENDER_DEPLOY_HOOK_URL` (quien la tenga puede lanzar despliegues). `SECRET_KEY` la generó Render y solo está en su panel, junto con `PORT=8000`. Ninguna de las dos está en el código.
+  - Render comprueba `/health` antes de dar por bueno cada despliegue: si la nueva versión no arranca, sigue sirviendo la anterior.
+  - Después, el CI espera a que Render sirva el commit nuevo y lanza la **prueba de humo** contra la URL pública (ver *Tests → Prueba de humo del despliegue*).
+  - Se puede relanzar a mano desde *Actions → CI → Run workflow* sobre `main`.
+  - Limitaciones del plan gratuito: se duerme tras 15 minutos sin peticiones (la siguiente tarda unos 50 segundos en despertar) y el disco no es permanente, así que la base de datos SQLite se vacía en cada despliegue o reinicio. Para datos permanentes haría falta PostgreSQL (ver *Mejoras futuras*).
 
 ## Otras decisiones de diseño
 - **404 y no 403 con lo ajeno:** si una entrada o un equipo es de otro usuario, respondemos como si no existiera, para no confirmar qué ids hay.
@@ -286,12 +351,13 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
 - **Rate limiting** por tipo de endpoint y **CORS** limitado a los orígenes de `CORS_ORIGINS`.
 - **Secretos fuera del repo:** `.env` en `.gitignore` y `.dockerignore`. El CI usa claves de prueba.
 - **Contenedor** con usuario sin privilegios.
+- **HTTPS en producción:** el token viaja en cada petición, y por HTTP cualquiera en la misma red podría leerlo y suplantar al usuario. El despliegue de Render sirve la API solo por HTTPS, con certificado automático. En local (`localhost`) basta HTTP.
 - **Imágenes de las fichas** solo desde `raw.githubusercontent.com`, por HTTPS y hasta 2 MB: la API no se puede usar para hacer peticiones a otros sitios (SSRF).
 - **Logs sin datos sensibles:** ni contraseñas, ni tokens, ni cuerpos de petición, ni query strings. Los nombres de usuario se escapan para que nadie pueda inventar líneas en el log.
 - Detalle y limitaciones conocidas en [`SECURITY.md`](SECURITY.md).
 
 ## Mejoras Futuras
-- Desplegar la imagen en una plataforma (Render, Railway o Fly.io) con PostgreSQL.
+- PostgreSQL en el despliegue de Render, para que los datos sobrevivan a cada despliegue (ahora es SQLite en un disco temporal).
 - Anular también el access token al cerrar sesión (lista de bloqueo por `jti`) o acortarlo a minutos ahora que existe el refresh token. Borrar periódicamente los refresh tokens caducados de la tabla.
 - Rate limiting por usuario y con almacenamiento compartido (Redis), en lugar de por IP y en memoria.
 - Migraciones de base de datos con Alembic.

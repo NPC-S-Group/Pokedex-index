@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import func, select
 
@@ -25,6 +25,7 @@ from app.models import (
 )
 from app.services.estadisticas import racha_de_capturas, tipo_mas_comun
 from app.services.export_service import pokedex_a_csv, pokedex_a_pdf
+from app.versionado import obsoleta_en_v1
 
 router = APIRouter(prefix="/pokedex", tags=["pokedex"])
 
@@ -73,7 +74,14 @@ async def anadir(
     return entrada
 
 
-@router.get("", response_model=list[PokedexEntryRead])
+# Listado y detalle tienen sucesora en /api/v2/pokedex: se marcan obsoletos
+# (cabeceras Deprecation, Sunset y Link, y tachados en Swagger). Ver app/versionado.py.
+@router.get(
+    "",
+    response_model=list[PokedexEntryRead],
+    deprecated=True,
+    dependencies=[Depends(obsoleta_en_v1)],
+)
 @limiter.limit(LIMITE_AUTENTICADO)
 def listar(
     request: Request,
@@ -189,7 +197,12 @@ def _entrada_propia(session, entry_id: int, usuario) -> PokedexEntry:
     return entrada
 
 
-@router.get("/{entry_id}", response_model=PokedexEntryRead)
+@router.get(
+    "/{entry_id}",
+    response_model=PokedexEntryRead,
+    deprecated=True,
+    dependencies=[Depends(obsoleta_en_v1)],
+)
 @limiter.limit(LIMITE_AUTENTICADO)
 def detalle(request: Request, entry_id: int, usuario: CurrentUser, session: SessionDep):
     return _entrada_propia(session, entry_id, usuario)
@@ -199,7 +212,10 @@ def detalle(request: Request, entry_id: int, usuario: CurrentUser, session: Sess
 @limiter.limit(LIMITE_AUTENTICADO)
 def actualizar(
     request: Request,
-    entry_id: int, datos: PokedexEntryUpdate, usuario: CurrentUser, session: SessionDep
+    entry_id: int,
+    datos: PokedexEntryUpdate,
+    usuario: CurrentUser,
+    session: SessionDep,
 ):
     entrada = _entrada_propia(session, entry_id, usuario)
     cambios = datos.model_dump(exclude_unset=True)

@@ -1,6 +1,7 @@
 """Punto de entrada de la API. Base tomada del hito 4 de la práctica guiada."""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -47,6 +48,8 @@ app.add_middleware(
     # PUT hace falta para actualizar equipos desde un navegador.
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
+    # Sin esto, el JavaScript de otra web no puede leer los avisos de deprecación.
+    expose_headers=["Deprecation", "Sunset", "Link"],
 )
 
 # Límites por endpoint (@limiter.limit) y por defecto (default_limits) en app/limits.py.
@@ -69,4 +72,9 @@ app.include_router(pokedex_v2.router, prefix="/api/v2")
 
 @app.get("/health", tags=["sistema"])
 def health():  # sin límite: la usan los monitores
-    return {"status": "ok"}
+    respuesta = {"status": "ok"}
+    # Render pone el commit desplegado en RENDER_GIT_COMMIT. El CI lo usa para saber
+    # cuándo ya se sirve la versión nueva y lanzar la prueba de humo (scripts/).
+    if commit := os.getenv("RENDER_GIT_COMMIT"):
+        respuesta["commit"] = commit
+    return respuesta

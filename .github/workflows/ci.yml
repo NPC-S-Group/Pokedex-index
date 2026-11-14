@@ -136,3 +136,57 @@ jobs:
       - name: Borrar imágenes sin usar
         if: always()
         run: docker image prune -f
+
+  # Despliegue público en Render (extra del enunciado): solo cuando cambia main y
+  # después de los tests. Llama al deploy hook de Render, guardado como secreto del
+  # repo (RENDER_DEPLOY_HOOK_URL), espera a que Render sirva este commit y lanza la
+  # prueba de humo (scripts/prueba_humo.py). Sin el secreto, el trabajo no hace nada.
+  deploy-render:
+    needs: tests
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    concurrency:
+      group: deploy-render
+      cancel-in-progress: false
+    env:
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+      URL: https://pokedex-api-wrok.onrender.com
+    steps:
+      - name: Lanzar despliegue en Render
+        id: hook
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "::notice::Sin el secreto RENDER_DEPLOY_HOOK_URL: no se despliega en Render."
+            echo "lanzado=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL" > /dev/null
+          echo "lanzado=true" >> "$GITHUB_OUTPUT"
+          echo "Despliegue lanzado en Render."
+      - name: Esperar a que Render sirva este commit
+        if: steps.hook.outputs.lanzado == 'true'
+        run: |
+          # Render sigue sirviendo la versión anterior hasta que la nueva pasa su
+          # health check. /health dice qué commit está sirviendo (RENDER_GIT_COMMIT).
+          for i in $(seq 1 90); do
+            commit=$(curl -fsS -m 60 "$URL/health" | jq -r '.commit // empty' || true)
+            if [ "$commit" = "$GITHUB_SHA" ]; then echo "Render ya sirve $GITHUB_SHA"; exit 0; fi
+            echo "Esperando... Render sirve '${commit:-?}' (intento $i/90)"
+            sleep 10
+          done
+          echo "::error::Render no ha desplegado $GITHUB_SHA en 15 minutos. Revisa los logs en Render."
+          exit 1
+      - uses: actions/checkout@v4
+        if: steps.hook.outputs.lanzado == 'true'
+      - uses: actions/setup-python@v5
+        if: steps.hook.outputs.lanzado == 'true'
+        with:
+          python-version: "3.12"
+      - name: Prueba de humo de la API desplegada
+        if: steps.hook.outputs.lanzado == 'true'
+        run: |
+          pip install httpx
+          python scripts/prueba_humo.py "$URL"
