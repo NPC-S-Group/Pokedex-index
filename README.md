@@ -68,10 +68,10 @@ Todos bajo `/api/v1` salvo `/health` y la v2 de ejemplo (`/api/v2`, ver *Version
 | GET 🔒 | `/pokemon/{id_or_name}` | Detalle: tipos, habilidades, sprites y estadísticas | 30/min |
 | GET 🔒 | `/pokemon/{id_or_name}/card` | Ficha del Pokémon en PDF | 30/min |
 | POST 🔒 | `/pokedex` | Añade un Pokémon (valida que exista; sin duplicados) | 30/min |
-| GET 🔒 | `/pokedex?captured=&favorite=&sort=&order=&limit=&offset=` | Lista tu Pokédex | 100/min |
+| GET 🔒 | `/pokedex?captured=&favorite=&sort=&order=&limit=&offset=` | Lista tu Pokédex. **Obsoleta:** usa la v2 (ver *Versionado*) | 100/min |
 | GET 🔒 | `/pokedex/stats` | Total, capturados, favoritos, % completado, tipo más común y racha | 100/min |
 | GET 🔒 | `/pokedex/export?format=csv\|pdf` | Exporta la Pokédex con los mismos filtros | 10/min |
-| GET · PATCH · DELETE 🔒 | `/pokedex/{entry_id}` | Detalle, actualización parcial y borrado de una entrada propia | 100/min |
+| GET · PATCH · DELETE 🔒 | `/pokedex/{entry_id}` | Detalle (**obsoleto:** usa la v2), actualización parcial y borrado de una entrada propia | 100/min |
 | GET · POST 🔒 | `/teams` | Lista tus equipos · crea uno (1 a 6 Pokémon de tu Pokédex) | 100/min |
 | GET · PUT · DELETE 🔒 | `/teams/{team_id}` | Detalle, reemplazo completo y borrado | 100/min |
 | GET 🔒 | `/teams/{team_id}/export` | Equipo en PDF: estadísticas combinadas y fichas | 30/min |
@@ -231,7 +231,31 @@ Las rutas llevan la versión en la URL (`/api/v1/...`, `/api/v2/...`). Como ejem
 | Datos del Pokémon | `pokemon_id`, `pokemon_name`, `pokemon_sprite` sueltos | Agrupados en `pokemon: {id, name, sprite}` |
 | Captura | `is_captured`, `capture_date` | `captured`, `captured_at` |
 
-**¿Por qué una v2 y no cambiar la v1?** Estos cambios rompen a cualquier cliente que ya use la v1: esperaba una lista y ahora recibe un objeto, y los campos cambian de nombre. Con la versión en la URL, los clientes antiguos siguen funcionando con la v1 y los nuevos usan la v2 cuando quieran. El sobre resuelve una carencia real de la v1, que no dice cuántas entradas hay en total ni si quedan más páginas.
+**¿Por qué es importante versionar?** Una API tiene clientes que no controlamos: una web, una app móvil o un script de otra persona. Si cambiamos la forma de una respuesta sin avisar, esos clientes dejan de funcionar de un día para otro. Con la versión en la URL, cada cliente elige cuándo migrar: los antiguos siguen usando la v1 y los nuevos usan la v2. Así la API puede evolucionar sin romper a nadie.
+
+**¿Qué cambios justifican una nueva versión?** Solo los que rompen a un cliente que ya existe:
+
+| Necesitan versión nueva (rompen) | No la necesitan (compatibles) |
+|---|---|
+| Quitar o renombrar un campo (`is_captured` → `captured`) | Añadir un campo nuevo a la respuesta |
+| Cambiar la estructura (lista → objeto con `items`) o el tipo de un campo | Añadir un endpoint nuevo |
+| Hacer obligatorio un parámetro que era opcional | Añadir un parámetro opcional con valor por defecto |
+| Cambiar el significado de un valor o de un código de respuesta | Corregir un error sin cambiar el contrato |
+
+La v2 de la Pokédex existe por los tres primeros casos de la izquierda. Su sobre, además, resuelve una carencia real de la v1: no dice cuántas entradas hay en total ni si quedan más páginas.
+
+**¿Cuál es la estrategia de deprecación?** Una versión antigua no se borra de golpe: se anuncia, convive con la nueva y se retira en una fecha conocida.
+
+1. **Anunciar.** Cuando una ruta de la v1 tiene sucesora en la v2, se marca obsoleta (`app/versionado.py`). Ahora mismo lo están el listado y el detalle de la Pokédex. Cada respuesta lo avisa con cabeceras estándar, y en Swagger (`/docs`) aparecen tachadas:
+   ```http
+   Deprecation: @1794614400
+   Sunset: Wed, 30 Jun 2027 00:00:00 GMT
+   Link: </api/v2/pokedex>; rel="successor-version"
+   ```
+   `Deprecation` (RFC 9745) dice desde cuándo está obsoleta, `Sunset` (RFC 8594) cuándo se retira y `Link` dónde está la sucesora. CORS las expone para que también las pueda leer una web de otro origen.
+2. **Convivir.** La ruta obsoleta sigue funcionando exactamente igual al menos 6 meses (del 14 de noviembre de 2026 al 30 de junio de 2027), y la v2 reutiliza su lógica, así que las dos dan los mismos datos.
+3. **Medir.** Cada uso de una ruta obsoleta queda en el log (`pokedex_api.versionado`). Antes de retirarla se comprueba que ya casi nadie la usa y, si hace falta, se avisa a quien la sigue usando.
+4. **Retirar.** Desde la fecha de `Sunset`, la ruta responde automáticamente `410 Gone`, con un mensaje y la cabecera `Link` que apuntan a la v2: no hace falta acordarse de borrarla ese día. La v1 se mantiene entera mientras tenga rutas sin sucesora: escribir, `/stats` y `/export` solo existen en la v1 y no están obsoletas.
 
 **¿Cómo está hecha?** La v2 (`app/routers/pokedex_v2.py`) solo tiene lectura (listado y detalle) y reutiliza de la v1 los filtros, el orden y la comprobación de propiedad. Lo único que cambia es cómo se presenta la respuesta (`PokedexEntryV2` y `PokedexPageV2` en `app/models.py`), así que no hay lógica duplicada que pueda divergir. Escribir se sigue haciendo por la v1.
 

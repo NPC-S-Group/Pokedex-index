@@ -47,6 +47,8 @@ app.add_middleware(
     # PUT hace falta para actualizar equipos desde un navegador.
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
+    # Sin esto, el JavaScript de otra web no puede leer los avisos de deprecación.
+    expose_headers=["Deprecation", "Sunset", "Link"],
 )
 
 # Límites por endpoint (@limiter.limit) y por defecto (default_limits) en app/limits.py.
