@@ -20,6 +20,7 @@ Si encuentras una vulnerabilidad, **no abras una issue pública**. Escribe direc
 | Uso desde webs ajenas | CORS limitado a `CORS_ORIGINS` y a los métodos y cabeceras que usa la API | `app/main.py` |
 | Fallos de un servicio externo | Timeout y traducción de errores de la PokeAPI a 502/504, sin trazas internas | `app/services/pokeapi_service.py` |
 | Fuga de secretos | `.env` en `.gitignore` y `.dockerignore`. El CI usa claves de prueba. Historial revisado sin secretos | raíz del repo |
+| Robo del token en la red | En producción, la API se sirve solo por HTTPS (Render pone el certificado y redirige HTTP a HTTPS). Sin HTTPS, el token y la contraseña del login viajarían en claro | despliegue en Render |
 | Contenedor comprometido | La imagen corre con un usuario sin privilegios (`api`) | `Dockerfile` |
 | Peticiones a otros sitios desde el servidor (SSRF) | Las imágenes de las fichas en PDF solo se descargan de `raw.githubusercontent.com`, por HTTPS y hasta 2 MB. Se compara el host exacto: `raw.githubusercontent.com.evil.com` se rechaza | `app/services/pokeapi_service.py` |
 | Datos sensibles en los logs | No se registran contraseñas, tokens, cuerpos de petición ni query strings. En los 422 solo se guarda qué campo falla, nunca el valor enviado | `app/logs.py` |
