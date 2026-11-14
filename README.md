@@ -13,7 +13,7 @@ Stack: FastAPI, SQLModel (SQLite por defecto), JWT con `python-jose`, `bcrypt`, 
 | Miembro | Usuario Git | Partes desarrolladas |
 |---|---|---|
 | Jorge Aranda | [@jorgearanda179](https://github.com/jorgearanda179) | Organización, repo, tablero y CI (GitHub Actions + Docker); estructura base; fixtures comunes de tests; equipos de batalla y su export en PDF; rate limiting y CORS; documentación |
-| Miguel Pina | [@miguelpina671-cmd](https://github.com/miguelpina671-cmd) | Autenticación (`/auth/me`) y sus tests; tests del CRUD de la Pokédex y fix de `capture_date`; export de la Pokédex en CSV/PDF; API v2 de ejemplo |
+| Miguel Pina | [@miguelpina671-cmd](https://github.com/miguelpina671-cmd) | Autenticación (`/auth/me`, refresh tokens y logout) y sus tests; tests del CRUD de la Pokédex y fix de `capture_date`; export de la Pokédex en CSV/PDF; API v2 de ejemplo |
 | Henar Oliva | [@henarolivaperez-lang](https://github.com/henarolivaperez-lang) | Cliente de PokeAPI (errores, timeouts y logging); middleware de logging; búsqueda, detalle y ficha en PDF; estadísticas ampliadas |
 
 ## Instalación
@@ -62,7 +62,9 @@ Todos bajo `/api/v1` salvo `/health` y la v2 de ejemplo (`/api/v2`, ver *Version
 | Método | Ruta | Qué hace | Límite |
 |---|---|---|---|
 | POST | `/auth/register` | Registro (contraseña con mayúscula y número, mínimo 8) | 5/hora |
-| POST | `/auth/login` | Login (formulario OAuth2); devuelve el JWT | 10/min |
+| POST | `/auth/login` | Login (formulario OAuth2); devuelve el access token (24 h) y el refresh token (7 días) | 10/min |
+| POST | `/auth/refresh` | Cambia un refresh token por un par nuevo; el usado deja de valer | 10/min |
+| POST | `/auth/logout` | Anula el refresh token (responde siempre 204) | 10/min |
 | GET 🔒 | `/auth/me` | Usuario actual | 100/min |
 | GET 🔒 | `/pokemon/search?q=&type=&limit=&offset=` | Busca en la PokeAPI por nombre y/o tipo | 30/min |
 | GET 🔒 | `/pokemon/{id_or_name}` | Detalle: tipos, habilidades, sprites y estadísticas | 30/min |
@@ -89,7 +91,7 @@ Cada endpoint tiene su límite (`app/limits.py`), contado por IP con `slowapi`:
 | Tipo | Endpoints | Límite |
 |---|---|---|
 | Públicos | `POST /auth/register` | 5 por hora |
-| | `POST /auth/login` | 10 por minuto |
+| | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout` | 10 por minuto |
 | Llaman a la PokeAPI | `GET /pokemon/search`, `GET /pokemon/{id}`, `GET /pokemon/{id}/card` (PDF), `POST /pokedex`, `GET /teams/{id}/export` (PDF) | 30 por minuto |
 | Exportar la Pokédex | `GET /pokedex/export` (CSV o PDF, sin llamar a la PokeAPI) | 10 por minuto |
 | Autenticados | `GET /auth/me`, resto de `/pokedex` y `/teams` | 100 por minuto |
@@ -176,15 +178,30 @@ El nivel se cambia con `LOG_LEVEL` en el `.env` (`DEBUG`, `INFO`, `WARNING` o `E
 **Dónde se guarda:** en la consola y, además, en `pokedex_api.log` (se cambia con `LOG_FILE`; vacío = solo consola). El archivo rota al llegar a 1 MB y guarda 3 copias, así que no crece sin límite. Está en `.gitignore` y `.dockerignore`: un log puede contener nombres de usuario e IPs, y no se sube.
 
 ### Autenticación
-Registro con `POST /auth/register`, login con `POST /auth/login` (formulario OAuth2, para que funcione el botón **Authorize** de Swagger) y `GET /auth/me` para saber quién es el dueño del token.
+Registro con `POST /auth/register`, login con `POST /auth/login` (formulario OAuth2, para que funcione el botón **Authorize** de Swagger), `POST /auth/refresh` para renovar la sesión, `POST /auth/logout` para cerrarla y `GET /auth/me` para saber quién es el dueño del token.
 
 | Paso | Qué hace la API |
 |---|---|
 | Registro | Valida usuario (3 a 50 caracteres), email y contraseña (mínimo 8, con una mayúscula y un número). Guarda solo el hash `bcrypt` y responde `201` con el usuario, nunca con la contraseña |
-| Login | Comprueba la contraseña con `bcrypt` y devuelve un JWT `{"access_token", "token_type": "bearer"}` |
+| Login | Comprueba la contraseña con `bcrypt` y devuelve `{"access_token", "refresh_token", "token_type": "bearer"}` |
+| Renovar (`/auth/refresh`) | Recibe `{"refresh_token"}` y devuelve un par nuevo. El refresh token usado queda anulado |
+| Cerrar sesión (`/auth/logout`) | Recibe `{"refresh_token"}` y lo anula |
 | Cada petición protegida | Lee el token, comprueba la firma y la caducidad y busca al usuario por el `user_id` del token |
 
-**¿Qué lleva el token?** `sub` (nombre de usuario), `user_id`, `iat` y `exp`. Caduca a las 24 horas (`access_token_expire_minutes`). Con el token se busca al usuario por su `user_id` (la clave primaria), no por el nombre.
+**¿Qué lleva el token?** `sub` (nombre de usuario), `user_id`, `type`, `iat` y `exp`. El access token (`type: "access"`) caduca a las 24 horas (`access_token_expire_minutes`). Con el token se busca al usuario por su `user_id` (la clave primaria), no por el nombre.
+
+**¿Para qué sirve el refresh token?** Para no tener que escribir la contraseña cada día. El access token va en cada petición, así que, si alguien lo roba, puede usarlo; por eso dura poco (24 h). El refresh token (`type: "refresh"`, 7 días, `refresh_token_expire_days`) solo se envía a `/auth/refresh` para pedir un par nuevo. Así, una sesión dura hasta 7 días desde el último uso sin volver a dar la contraseña.
+
+| Medida | Por qué |
+|---|---|
+| **Tipos separados** | Un refresh token no sirve para entrar (`401` en cualquier endpoint protegido) y un access token no sirve para renovar. Robar uno no da los poderes del otro |
+| **Rotación** | Cada refresh token se usa una sola vez: `/auth/refresh` lo anula y entrega otro. Un refresh token robado deja de valer en cuanto el usuario renueva su sesión |
+| **Detección de reutilización** | Si llega un refresh token ya usado, alguien tiene una copia: o el ladrón o el usuario. Como no sabemos quién es quién, se anulan todos los refresh tokens de la cuenta y los dos tienen que volver a entrar con contraseña |
+| **Guardados en la base de datos** (`RefreshToken`) | Un JWT no se puede «desfirmar». Para poder anular un refresh token (rotación, logout o reutilización) se guarda su identificador (`jti`) y si está anulado (`revoked_at`). La caducidad la sigue marcando el propio JWT |
+| **Anulación atómica** | Se anula con un `UPDATE … WHERE revoked_at IS NULL`: si llegan dos renovaciones con el mismo token a la vez, solo una gana y la otra cuenta como reutilización |
+| **Logout siempre 204** | Responde igual si el token es válido, falso o ya estaba anulado: no sirve para averiguar qué tokens existen |
+
+**¿Y el access token tras el logout?** Sigue valiendo hasta que caduca (máximo 24 h), porque se comprueba sin consultar la base de datos. El cliente debe borrarlo al cerrar sesión. Anularlo al momento exigiría consultar una lista de bloqueo en cada petición (ver *Mejoras futuras*). Los tokens emitidos antes de esta mejora, que no llevan `type`, se tratan como access tokens hasta que caducan.
 
 **¿Cuándo da 401?** Sin token, con un token inventado, firmado con otra clave, caducado o sin `user_id`, y también si el usuario ya no existe o está desactivado (`is_active = False`). Si llega un token y falla cualquiera de estas comprobaciones, la respuesta es siempre la misma, `Credenciales no válidas`: quien prueba tokens no sabe cuál ha fallado.
 
@@ -261,6 +278,7 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
 ## Decisiones de Seguridad
 - **Contraseñas** con `bcrypt` (sal por usuario). Nunca se devuelven ni se registran en los logs.
 - **JWT** firmados con HS256 y `SECRET_KEY`, con caducidad de 24 horas. Sin `SECRET_KEY` la aplicación no arranca: no hay clave por defecto.
+- **Refresh tokens** de 7 días, de un solo uso (rotación), que se pueden anular (logout) y que, si se reutilizan, anulan todas las sesiones de la cuenta. No sirven para entrar en los endpoints protegidos.
 - **Login sin pistas:** el mismo mensaje para "no existe el usuario" y "contraseña incorrecta".
 - **Tokens de cuentas borradas o desactivadas:** cada petición comprueba que el usuario del token sigue existiendo y está activo; si no, `401`.
 - **Exportación CSV sin fórmulas:** las celdas que escribe el usuario y empiezan por `=`, `+`, `-` o `@` se neutralizan para que Excel no las ejecute (inyección CSV).
@@ -274,7 +292,7 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
 
 ## Mejoras Futuras
 - Desplegar la imagen en una plataforma (Render, Railway o Fly.io) con PostgreSQL.
-- Revocar tokens (lista de bloqueo o tokens de refresco cortos).
+- Anular también el access token al cerrar sesión (lista de bloqueo por `jti`) o acortarlo a minutos ahora que existe el refresh token. Borrar periódicamente los refresh tokens caducados de la tabla.
 - Rate limiting por usuario y con almacenamiento compartido (Redis), en lugar de por IP y en memoria.
 - Migraciones de base de datos con Alembic.
 - Caché de las respuestas de la PokeAPI más allá de la búsqueda.
