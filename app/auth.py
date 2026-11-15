@@ -12,16 +12,25 @@ import bcrypt
 from jose import JWTError, jwt
 
 from app.config import settings
+from app.contrasenas import BCRYPT_MAX_BYTES, demasiado_larga
 
 # bcrypt directamente: passlib lleva años sin mantenerse y falla con bcrypt ≥ 4.1
 # (AttributeError: module 'bcrypt' has no attribute '__about__').
 
 
 def hash_password(password: str) -> str:
+    if demasiado_larga(password):
+        # No debería llegar aquí: UserCreate ya lo rechaza con un 422.
+        raise ValueError(f"la contraseña no puede pasar de {BCRYPT_MAX_BYTES} bytes")
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(password: str, hashed: str) -> bool:
+    if demasiado_larga(password):
+        # Nunca puede ser la buena (no se pudo registrar así). Se ejecuta bcrypt igual
+        # con otra clave para que tarde lo mismo que un fallo normal y no dé pistas.
+        bcrypt.checkpw(b"contrasena-demasiado-larga", hashed.encode())
+        return False
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
 

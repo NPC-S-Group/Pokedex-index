@@ -24,7 +24,7 @@ git clone https://github.com/NPC-S-Group/Pokedex-index.git
 cd Pokedex-index
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # o requirements.txt si solo vas a ejecutarla
 ```
 
 ## Configuración
@@ -32,12 +32,13 @@ Copia `.env.example` como `.env` y rellena los valores:
 
 | Variable | Para qué sirve |
 |---|---|
-| `SECRET_KEY` | **Obligatoria.** Clave para firmar los JWT. Genera una con `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
+| `SECRET_KEY` | **Obligatoria, mínimo 32 caracteres.** Clave para firmar los JWT. La API no arranca si es más corta o si sigue siendo la de `.env.example`. Genera una con `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
 | `DATABASE_URL` | Conexión a la base de datos (por defecto `sqlite:///./pokedex.db`) |
 | `CORS_ORIGINS` | Orígenes permitidos para CORS, como lista JSON (por defecto `["http://localhost:5173"]`) |
 | `POKEAPI_TIMEOUT` | Opcional. Segundos de espera a la PokeAPI antes de responder 504 (por defecto 5) |
 | `LOG_LEVEL` | Opcional. Nivel de log: `DEBUG`, `INFO`, `WARNING` o `ERROR` (por defecto `INFO`) |
 | `LOG_FILE` | Opcional. Archivo de log además de la consola (por defecto `pokedex_api.log`; vacío = solo consola) |
+| `TRUSTED_PROXY_HOPS` | Opcional. Cuántos proxies hay delante de la API (por defecto `0`, en local y en el homelab). En Render, `1`: así el límite de peticiones y los logs usan la IP real de cada usuario y no la del proxy. `TRUST_PROXY=true` es un atajo que equivale a `1` |
 
 ## Ejecución
 **En local** (con el `.env` configurado):
@@ -130,12 +131,17 @@ Cada endpoint tiene su límite (`app/limits.py`), contado por IP con `slowapi`:
 | Exportar la Pokédex | `GET /pokedex/export` (CSV o PDF, sin llamar a la PokeAPI) | 10 por minuto |
 | Autenticados | `GET /auth/me`, resto de `/pokedex` y `/teams` | 100 por minuto |
 | Sistema | `GET /health` | sin límite |
+| Por cuenta (no por IP) | `POST /auth/login` con contraseña incorrecta | 5 fallos cada 15 minutos |
 
 **¿Por qué diferentes límites?** Porque el riesgo y el coste de cada endpoint son distintos. Los públicos no exigen token y son el objetivo natural de bots: el registro se usa una vez por persona y el login, unas pocas veces. Los que llaman a la PokeAPI consumen un servicio externo que no es nuestro y que también limita, así que no dejamos que un usuario lo agote. Exportar recorre toda la Pokédex y genera un fichero (el PDF, en memoria): es más caro que un GET normal y nadie necesita más de unas pocas descargas por minuto. El resto es el uso normal de la API con un usuario identificado y puede ser más generoso.
 
 **¿Cómo protege esto la API?** Frena los ataques de fuerza bruta contra el login (10 intentos por minuto en lugar de miles), la creación masiva de cuentas y el abuso de la PokeAPI a través de nuestra API. Además, cada endpoint tiene su propio contador: agotar la búsqueda en la PokeAPI no bloquea la Pokédex ni los equipos.
 
 **¿Qué pasa si un usuario excede el límite?** Recibe `429 Too Many Requests` y la petición no se procesa. Ni siquiera se comprueba la contraseña: el límite se evalúa antes. Puede volver a intentarlo cuando pase la ventana de tiempo (un minuto o una hora).
+
+**¿Por qué además un límite por cuenta en el login?** El límite por IP se salta cambiando de IP (una VPN, muchos ordenadores). Tras 5 contraseñas incorrectas en 15 minutos, esa cuenta deja de aceptar logins durante un rato (`429` con `Retry-After: 900`), venga de donde venga. Un login correcto pone el contador a cero, y otras cuentas no se ven afectadas.
+
+**¿Qué IP se usa detrás de Render?** En Render las peticiones llegan a través de su proxy, así que la conexión viene siempre de la misma IP interna: todos los usuarios compartían el contador, y 10 logins fallidos de una persona bloqueaban el login de todos. Con `TRUSTED_PROXY_HOPS=1`, la IP se saca de la cabecera `X-Forwarded-For` empezando **por la derecha** (la entrada que añade Render), porque la parte izquierda la escribe el cliente y podría inventársela para saltarse el límite.
 
 > Nota técnica: no usamos `default_limits` de slowapi porque, con la versión de FastAPI del proyecto, no llega a aplicarse a las rutas de los routers. Por eso cada endpoint lleva su `@limiter.limit` explícito, y los tests de `tests/test_rate_limit_cors.py` comprueban cada nivel.
 
@@ -341,7 +347,7 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
 - **Despliegue público (Render):** <https://pokedex-api-wrok.onrender.com/docs>
   - Cada vez que cambia `main` y pasan los tests, el trabajo `deploy-render` del CI llama al *deploy hook* de Render, que construye la imagen con el mismo `Dockerfile` y la publica. Nunca se despliega desde `develop` ni desde una rama `features/`.
   - El *Auto-Deploy* de Render está apagado: si no, desplegaría cada commit de `main` aunque los tests fallaran. Así, lo que llega a producción siempre ha pasado por revisión y por el CI.
-  - La URL del hook está en el secreto `RENDER_DEPLOY_HOOK_URL` (quien la tenga puede lanzar despliegues). `SECRET_KEY` la generó Render y solo está en su panel, junto con `PORT=8000`. Ninguna de las dos está en el código.
+  - La URL del hook está en el secreto `RENDER_DEPLOY_HOOK_URL` (quien la tenga puede lanzar despliegues). `SECRET_KEY` la generó Render y solo está en su panel, junto con `PORT=8000` y `TRUSTED_PROXY_HOPS=1`. Ninguna está en el código. Para comprobar que `TRUSTED_PROXY_HOPS` está bien, en los logs de Render cada petición debe mostrar `ip=` con la IP pública de quien la hace, no una IP interna del proxy.
   - Render comprueba `/health` antes de dar por bueno cada despliegue: si la nueva versión no arranca, sigue sirviendo la anterior.
   - Después, el CI espera a que Render sirva el commit nuevo y lanza la **prueba de humo** contra la URL pública (ver *Tests → Prueba de humo del despliegue*).
   - Se puede relanzar a mano desde *Actions → CI → Run workflow* sobre `main`.
@@ -373,7 +379,8 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
 
 ## Mejoras Futuras
 - PostgreSQL en el despliegue de Render, para que los datos sobrevivan a cada despliegue (ahora es SQLite en un disco temporal).
-- Anular también el access token al cerrar sesión (lista de bloqueo por `jti`) o acortarlo a minutos ahora que existe el refresh token. Borrar periódicamente los refresh tokens caducados de la tabla.
-- Rate limiting por usuario y con almacenamiento compartido (Redis), en lugar de por IP y en memoria.
+- Anular también el access token al cerrar sesión (lista de bloqueo por `jti`). Ya dura solo 30 minutos y los refresh tokens caducados se borran al arrancar y en cada login.
+- Rate limiting con almacenamiento compartido (Redis), en lugar de en memoria.
+- Verificación del email al registrarse: evitaría revelar qué emails tienen cuenta y que alguien se registre con un email ajeno (ver *Limitaciones conocidas* en `SECURITY.md`).
 - Migraciones de base de datos con Alembic.
 - Caché de las respuestas de la PokeAPI más allá de la búsqueda.

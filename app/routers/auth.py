@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import func, or_, select, update
+from sqlmodel import delete, func, or_, select, update
 
 from app.auth import (
     create_access_token,
@@ -16,7 +16,15 @@ from app.auth import (
     verify_password,
 )
 from app.dependencies import CurrentUser, SessionDep
-from app.limits import LIMITE_AUTENTICADO, LIMITE_LOGIN, LIMITE_REGISTRO, limiter
+from app.limits import (
+    LIMITE_AUTENTICADO,
+    LIMITE_LOGIN,
+    LIMITE_REGISTRO,
+    apuntar_fallo,
+    cuenta_bloqueada,
+    limiter,
+    olvidar_fallos,
+)
 from app.models import (
     RefreshRequest,
     RefreshToken,
@@ -82,8 +90,20 @@ def registrar(request: Request, datos: UserCreate, session: SessionDep):
     return usuario
 
 
+def borrar_refresh_caducados(session, *condiciones) -> int:
+    """Borra de la BD los refresh tokens ya caducados: no sirven para nada y la
+    tabla crecería sin parar (uno nuevo por cada login y cada refresh)."""
+    resultado = session.execute(
+        delete(RefreshToken).where(RefreshToken.expires_at < ahora(), *condiciones)
+    )
+    session.commit()
+    return resultado.rowcount
+
+
 def _emitir_par(session, usuario: User) -> TokenPair:
     """Access token (30 min) + refresh token (7 días), guardando el refresh en la BD."""
+    # De paso, se limpian los caducados de este usuario (los del resto, al arrancar).
+    borrar_refresh_caducados(session, RefreshToken.user_id == usuario.id)
     refresh, jti, caduca = create_refresh_token(usuario.username, usuario.id)
     session.add(RefreshToken(jti=jti, user_id=usuario.id, expires_at=caduca))
     session.commit()
@@ -122,6 +142,16 @@ def login(
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
     session: SessionDep,
 ):
+    # Límite por cuenta: 5 fallos en 15 min y esa cuenta queda bloqueada un rato,
+    # venga de la IP que venga. Se comprueba ANTES de bcrypt: no gasta CPU.
+    # También cuenta para usuarios que no existen, para no delatar cuáles existen.
+    if cuenta_bloqueada(form.username):
+        logger.warning("login bloqueado por demasiados fallos: %r", form.username)
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Demasiados intentos fallidos para esta cuenta. Prueba en 15 minutos.",
+            headers={"Retry-After": "900"},
+        )
     # Sin distinguir mayúsculas: «Ash», «ash» y «ASH» entran en la misma cuenta.
     usuario = session.exec(
         select(User).where(
@@ -133,12 +163,14 @@ def login(
     clave_correcta = verify_password(form.password, hash_guardado)
     # Una cuenta desactivada recibe el mismo error: ni tokens ni pistas.
     if usuario is None or not clave_correcta or not usuario.is_active:
+        apuntar_fallo(form.username)
         logger.warning("login fallido para %r", form.username)
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
             LOGIN_INCORRECTO,
             headers={"WWW-Authenticate": "Bearer"},
         )
+    olvidar_fallos(form.username)
     logger.info("login correcto: %r (id=%s)", usuario.username, usuario.id)
     return _emitir_par(session, usuario)
 

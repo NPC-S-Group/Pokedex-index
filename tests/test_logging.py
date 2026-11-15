@@ -200,8 +200,9 @@ def test_la_respuesta_422_no_cambia(client):
 
 
 def test_registra_el_429(client, test_user, logs):
-    for _ in range(11):
-        r = client.post(LOGIN, data={"username": "ash", "password": "Mala12345"})
+    # Un nombre distinto cada vez: así salta el límite por IP y no el de la cuenta.
+    for i in range(11):
+        r = client.post(LOGIN, data={"username": f"otro{i}", "password": "Mala12345"})
     assert r.status_code == 429
     [mensaje] = mensajes(logs, "pokedex_api.limites", logging.WARNING)
     assert "POST /api/v1/auth/login → 429" in mensaje
