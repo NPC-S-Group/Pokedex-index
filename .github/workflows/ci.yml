@@ -13,7 +13,7 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     env:
-      SECRET_KEY: clave-solo-para-ci     # clave de pruebas, nunca la real
+      SECRET_KEY: clave-solo-para-ci-no-usar-en-produccion     # clave de pruebas, nunca la real
       DATABASE_URL: sqlite:///./test.db
     steps:
       - uses: actions/checkout@v4
@@ -21,7 +21,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Instalar dependencias
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
       - name: Ejecutar tests con cobertura
         run: pytest --cov=app --cov-report=term-missing --cov-fail-under=80
 
@@ -44,7 +44,7 @@ jobs:
       - name: Arrancar la API en un contenedor
         run: |
           docker run -d --name "$CONTENEDOR" \
-            -e SECRET_KEY=clave-solo-para-ci \
+            -e SECRET_KEY=clave-solo-para-ci-no-usar-en-produccion \
             -e DATABASE_URL=sqlite:///./ci.db \
             -p 127.0.0.1::8000 "$IMAGEN"
       - name: Comprobar /health y /docs
@@ -95,6 +95,7 @@ jobs:
           SECRET_KEY: ${{ secrets.HOMELAB_SECRET_KEY }}
         run: |
           test -n "$SECRET_KEY" || { echo "Falta el secreto HOMELAB_SECRET_KEY"; exit 1; }
+          test "${#SECRET_KEY}" -ge 32 || { echo "HOMELAB_SECRET_KEY debe tener 32 caracteres o más"; exit 1; }
           docker rm -f "$CONTENEDOR" 2>/dev/null || true
           # Los datos (BD y log) viven en un volumen: sobreviven a cada despliegue.
           docker run -d --name "$CONTENEDOR" --restart unless-stopped \

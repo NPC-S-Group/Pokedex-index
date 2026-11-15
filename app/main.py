@@ -9,11 +9,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from sqlmodel import Session
 
 # Importar los modelos registra las tablas antes de create_db_and_tables().
 from app import models  # noqa: F401
 from app.config import settings
-from app.database import create_db_and_tables
+from app.database import create_db_and_tables, engine
 from app.limits import limiter
 from app.logs import (
     configurar_logging,
@@ -22,6 +23,7 @@ from app.logs import (
     registrar_peticiones,
 )
 from app.routers import auth, pokedex, pokedex_v2, pokemon, teams
+from app.seguridad import cabeceras_seguridad
 
 configurar_logging(settings.log_level, settings.log_file)
 logger = logging.getLogger("pokedex_api")
@@ -31,6 +33,9 @@ logger = logging.getLogger("pokedex_api")
 async def lifespan(app: FastAPI):
     create_db_and_tables()
     logger.info("base de datos lista")
+    with Session(engine) as session:
+        borrados = auth.borrar_refresh_caducados(session)
+    logger.info("refresh tokens caducados borrados: %s", borrados)
     yield
     logger.info("apagando")
 
@@ -56,6 +61,9 @@ app.add_middleware(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, registrar_limite_superado)
 app.add_middleware(SlowAPIMiddleware)
+
+# Cabeceras de seguridad (app/seguridad.py) en todas las respuestas.
+app.middleware("http")(cabeceras_seguridad)
 
 # Logging (app/logs.py): se añade el último para ser el más externo y ver todas
 # las respuestas, también las de CORS y las 429.

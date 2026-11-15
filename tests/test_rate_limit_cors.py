@@ -10,9 +10,16 @@ def _login(client):
 
 
 def test_rate_limit_exceeded(client, test_user):
-    """Login: 10 por minuto. La 11.ª petición da 429."""
-    for _ in range(10):
-        assert _login(client).status_code == 401
+    """Login: 10 por minuto y por IP. La 11.ª petición da 429.
+
+    Cada intento usa un nombre distinto para no tocar el límite POR CUENTA (5),
+    que se prueba aparte en test_seguridad.py.
+    """
+    for i in range(10):
+        r = client.post(
+            "/api/v1/auth/login", data={"username": f"otro{i}", "password": "mala"}
+        )
+        assert r.status_code == 401
     r = _login(client)
     assert r.status_code == 429
     # Ni siquiera con la contraseña buena: el límite va antes que la comprobación.
