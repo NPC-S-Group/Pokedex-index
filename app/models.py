@@ -154,7 +154,12 @@ class PokedexEntry(PokedexEntryBase, table=True):
 
 
 class PokedexEntryCreate(PokedexEntryBase):
-    pokemon_id: int = Field(ge=1, le=1025)
+    pokemon_id: int = Field(ge=1, le=TOTAL_POKEMON)
+
+    @field_validator("nickname")
+    @classmethod
+    def mote_limpio(cls, valor: str | None) -> str | None:
+        return texto_limpio(valor, "el mote") or None
 
 
 class PokedexEntryRead(PokedexEntryBase):
@@ -191,8 +196,16 @@ class PokedexEntryUpdate(SQLModel):
         # Una fecha sin zona horaria («2026-01-15T10:00:00») se toma como UTC.
         # Sin esto la base de datos la rechaza y la API devolvía un 500.
         if valor is not None and valor.tzinfo is None:
-            return valor.replace(tzinfo=UTC)
+            valor = valor.replace(tzinfo=UTC)
+        # 5 minutos de margen por si el reloj del cliente va un poco adelantado.
+        if valor is not None and valor > ahora() + timedelta(minutes=5):
+            raise ValueError("la fecha de captura no puede ser futura")
         return valor
+
+    @field_validator("nickname")
+    @classmethod
+    def mote_limpio(cls, valor: str | None) -> str | None:
+        return texto_limpio(valor, "el mote") or None
 
 
 # ───────────────────────────── Equipos ─────────────────────────────
@@ -228,6 +241,21 @@ class TeamBase(SQLModel):
 class TeamCreate(TeamBase):
     # Ids de Pokémon (los de la PokeAPI) que ya están en la Pokédex del usuario.
     pokemon_ids: list[int] = Field(min_length=1, max_length=6)
+
+    # Solo en lo que entra (TeamCreate), no en TeamRead: un equipo ya guardado con un
+    # nombre raro se sigue pudiendo leer.
+    @field_validator("name", mode="before")
+    @classmethod
+    def nombre_limpio(cls, valor):
+        # Antes de validar la longitud: «   » se queda en «» y da 422.
+        return texto_limpio(valor, "el nombre") if isinstance(valor, str) else valor
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def descripcion_limpia(cls, valor):
+        if isinstance(valor, str):
+            return valor.strip() or None
+        return valor
 
     @field_validator("pokemon_ids")
     @classmethod
