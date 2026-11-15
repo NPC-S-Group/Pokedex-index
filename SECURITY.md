@@ -9,7 +9,7 @@ Si encuentras una vulnerabilidad, **no abras una issue pública**. Escribe direc
 |---|---|---|
 | Robo de contraseñas | Hash con `bcrypt` y sal por usuario. Nunca se devuelven ni aparecen en los logs | `app/auth.py`, `app/logs.py` |
 | Contraseñas débiles | Mínimo 8 caracteres, con al menos una mayúscula y un número | `UserCreate` en `app/models.py` |
-| Suplantación | JWT firmados (HS256) con caducidad de 24 h. Sin `SECRET_KEY` la app no arranca | `app/auth.py`, `app/config.py` |
+| Suplantación | JWT firmados (HS256): el de acceso caduca a los 30 min y el refresh token a los 7 días, con rotación y logout. Sin `SECRET_KEY` la app no arranca | `app/auth.py`, `app/config.py` |
 | Robo de un refresh token | Duran 7 días y son de un solo uso (rotación). Si se reutiliza uno ya usado, se anulan todos los de la cuenta. El logout lo anula. Un refresh token no sirve para entrar, ni un access token para renovar | `app/routers/auth.py`, `app/dependencies.py` |
 | Enumeración de usuarios | El mismo error (401, mismo mensaje y mismas cabeceras) para usuario inexistente, contraseña incorrecta y cuenta desactivada. Además, el mismo tiempo de respuesta: `bcrypt` se ejecuta siempre, con un hash falso si el usuario no existe, para que un atacante no pueda distinguir los casos con un cronómetro (timing attack). Lo comprueban tests en `tests/test_auth.py` | `app/routers/auth.py` |
 | Token de una cuenta borrada o desactivada | Cada petición busca al usuario por el `user_id` del token y comprueba `is_active`. Todos los fallos del token responden el mismo `401`, sin decir cuál ha fallado | `app/dependencies.py` |

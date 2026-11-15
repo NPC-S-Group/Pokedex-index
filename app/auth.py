@@ -1,7 +1,7 @@
 """Contraseñas (bcrypt) y testigos (JWT).
 
 Dos tipos de JWT, distinguidos por el claim «type»:
-- access (24 h): va en cada petición, en la cabecera Authorization.
+- access (30 min): va en cada petición, en la cabecera Authorization.
 - refresh (7 días): solo sirve para pedir un par nuevo en /auth/refresh.
 """
 

@@ -83,7 +83,7 @@ def registrar(request: Request, datos: UserCreate, session: SessionDep):
 
 
 def _emitir_par(session, usuario: User) -> TokenPair:
-    """Access token (24 h) + refresh token (7 días), guardando el refresh en la BD."""
+    """Access token (30 min) + refresh token (7 días), guardando el refresh en la BD."""
     refresh, jti, caduca = create_refresh_token(usuario.username, usuario.id)
     session.add(RefreshToken(jti=jti, user_id=usuario.id, expires_at=caduca))
     session.commit()
@@ -186,7 +186,7 @@ def refrescar(request: Request, datos: RefreshRequest, session: SessionDep):
 def logout(request: Request, datos: RefreshRequest, session: SessionDep):
     """Anula el refresh token. Responde 204 siempre, sea válido o no: así no sirve
     para averiguar qué tokens existen. El access token sigue valiendo hasta que
-    caduca (máximo 24 h): el cliente debe borrarlo."""
+    caduca (máximo 30 min): el cliente debe borrarlo."""
     payload = _payload_refresh(datos.refresh_token)
     if payload is not None and _anular(session, RefreshToken.jti == payload["jti"]):
         logger.info(

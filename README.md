@@ -222,7 +222,7 @@ Registro con `POST /auth/register`, login con `POST /auth/login` (formulario OAu
 | Cerrar sesión (`/auth/logout`) | Recibe `{"refresh_token"}` y lo anula |
 | Cada petición protegida | Lee el token, comprueba la firma y la caducidad y busca al usuario por el `user_id` del token |
 
-**¿Qué lleva el token?** `sub` (nombre de usuario), `user_id`, `type`, `iat` y `exp`. El access token (`type: "access"`) caduca a las 24 horas (`access_token_expire_minutes`). Con el token se busca al usuario por su `user_id` (la clave primaria), no por el nombre.
+**¿Qué lleva el token?** `sub` (nombre de usuario), `user_id`, `type`, `iat` y `exp`. El access token (`type: "access"`) caduca a los **30 minutos** (`access_token_expire_minutes`); para seguir conectado se usa el refresh token (7 días). Con el token se busca al usuario por su `user_id` (la clave primaria), no por el nombre.
 
 **¿Para qué sirve el refresh token?** Para no tener que escribir la contraseña cada día. El access token va en cada petición, así que, si alguien lo roba, puede usarlo; por eso dura poco (24 h). El refresh token (`type: "refresh"`, 7 días, `refresh_token_expire_days`) solo se envía a `/auth/refresh` para pedir un par nuevo. Así, una sesión dura hasta 7 días desde el último uso sin volver a dar la contraseña.
 
@@ -235,7 +235,7 @@ Registro con `POST /auth/register`, login con `POST /auth/login` (formulario OAu
 | **Anulación atómica** | Se anula con un `UPDATE … WHERE revoked_at IS NULL`: si llegan dos renovaciones con el mismo token a la vez, solo una gana y la otra cuenta como reutilización |
 | **Logout siempre 204** | Responde igual si el token es válido, falso o ya estaba anulado: no sirve para averiguar qué tokens existen |
 
-**¿Y el access token tras el logout?** Sigue valiendo hasta que caduca (máximo 24 h), porque se comprueba sin consultar la base de datos. El cliente debe borrarlo al cerrar sesión. Anularlo al momento exigiría consultar una lista de bloqueo en cada petición (ver *Mejoras futuras*). Los tokens emitidos antes de esta mejora, que no llevan `type`, se tratan como access tokens hasta que caducan.
+**¿Y el access token tras el logout?** Sigue valiendo hasta que caduca (máximo 30 minutos; antes eran 24 h y en una demo parecía un fallo), porque se comprueba sin consultar la base de datos. El cliente debe borrarlo al cerrar sesión. Anularlo al momento exigiría consultar una lista de bloqueo en cada petición (ver *Mejoras futuras*). Los tokens emitidos antes de esta mejora, que no llevan `type`, se tratan como access tokens hasta que caducan.
 
 **¿Qué responde un login fallido?** Siempre lo mismo, falle lo que falle: `401` con `{"detail": "Usuario o contraseña incorrectos"}` y la cabecera `WWW-Authenticate: Bearer`. Ni el código, ni el mensaje, ni las cabeceras, ni el tiempo de respuesta dicen si el error está en el usuario, en la contraseña o en que la cuenta está desactivada (ver *Decisiones de Seguridad*).
 
@@ -344,7 +344,7 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
 
 ## Decisiones de Seguridad
 - **Contraseñas** con `bcrypt` (sal por usuario). Nunca se devuelven ni se registran en los logs.
-- **JWT** firmados con HS256 y `SECRET_KEY`, con caducidad de 24 horas. Sin `SECRET_KEY` la aplicación no arranca: no hay clave por defecto.
+- **JWT** firmados con HS256 y `SECRET_KEY`: el de acceso caduca a los 30 minutos y el refresh token a los 7 días. Sin `SECRET_KEY` la aplicación no arranca: no hay clave por defecto.
 - **Refresh tokens** de 7 días, de un solo uso (rotación), que se pueden anular (logout) y que, si se reutilizan, anulan todas las sesiones de la cuenta. No sirven para entrar en los endpoints protegidos.
 - **Login sin pistas:** el mismo código (`401`), el mismo mensaje («Usuario o contraseña incorrectos») y **el mismo tiempo de respuesta** si no existe el usuario, si la contraseña es incorrecta o si la cuenta está desactivada. El tiempo también cuenta: antes, «no existe» respondía en ~9 ms y «contraseña mala» en ~250 ms, porque solo en el segundo caso se ejecutaba `bcrypt`, y con un cronómetro se podía averiguar qué usuarios existen. Ahora `bcrypt` se ejecuta siempre (con un hash falso si el usuario no existe) y los dos casos tardan lo mismo.
 - **Tokens de cuentas borradas o desactivadas:** cada petición comprueba que el usuario del token sigue existiendo y está activo; si no, `401`.
