@@ -127,3 +127,124 @@ def test_fecha_de_captura_pasada_o_actual(client, auth_headers, test_user, add_t
     # Un reloj del cliente un par de minutos adelantado no es un error.
     casi_ahora = (datetime.now(UTC) + timedelta(minutes=2)).isoformat()
     assert client.patch(url, json={"capture_date": casi_ahora}, headers=auth_headers).status_code == 200
+
+
+# ─────────────── 3 y 6. Búsqueda: formas especiales y nombres con signos ───────────────
+
+import httpx  # noqa: E402
+
+from app.dependencies import get_pokeapi_service  # noqa: E402
+from app.main import app  # noqa: E402
+from app.services.pokeapi_service import PokeAPIService, nombre_a_slug  # noqa: E402
+
+BASE = "https://pokeapi.test/api/v2"
+LISTADO = {
+    25: "pikachu",
+    29: "nidoran-f",
+    32: "nidoran-m",
+    83: "farfetchd",
+    122: "mr-mime",
+    439: "mime-jr",
+    669: "flabebe",
+    772: "type-null",
+    10080: "pikachu-rock-star",
+    10081: "pikachu-belle",
+}
+
+
+def _manejador(peticiones):
+    def manejar(request: httpx.Request) -> httpx.Response:
+        peticiones.append(request.url.path)
+        if request.url.path == "/api/v2/pokemon":
+            return httpx.Response(
+                200,
+                json={
+                    "count": len(LISTADO),
+                    "results": [
+                        {"name": n, "url": f"{BASE}/pokemon/{i}/"} for i, n in LISTADO.items()
+                    ],
+                },
+            )
+        return httpx.Response(404, text="Not Found")
+
+    return manejar
+
+
+@pytest.fixture
+def servicio():
+    PokeAPIService.limpiar_cache()
+    peticiones = []
+    poke = PokeAPIService(BASE, transport=httpx.MockTransport(_manejador(peticiones)))
+    poke.peticiones = peticiones
+    yield poke
+    PokeAPIService.limpiar_cache()
+
+
+@pytest.mark.parametrize(
+    ("escrito", "slug"),
+    [
+        ("Mr. Mime", "mr-mime"),
+        ("mr mime", "mr-mime"),
+        ("Mime Jr.", "mime-jr"),
+        ("Farfetch'd", "farfetchd"),
+        ("Farfetch’d", "farfetchd"),
+        ("Nidoran♀", "nidoran-f"),
+        ("nidoran♂", "nidoran-m"),
+        ("Flabébé", "flabebe"),
+        ("Type: Null", "type-null"),
+        ("  PIKACHU ", "pikachu"),
+        (25, "25"),
+    ],
+)
+def test_nombre_a_slug(escrito, slug):
+    assert nombre_a_slug(escrito) == slug
+
+
+@pytest.mark.anyio
+async def test_busqueda_sin_formas_especiales_por_defecto(servicio):
+    datos = await servicio.buscar(texto="pikachu")
+    assert [p["id"] for p in datos["results"]] == [25]
+    assert datos["count"] == 1
+
+
+@pytest.mark.anyio
+async def test_busqueda_con_formas_especiales_si_se_piden(servicio):
+    datos = await servicio.buscar(texto="pikachu", incluir_formas=True)
+    assert [p["id"] for p in datos["results"]] == [25, 10080, 10081]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("escrito", "esperado"),
+    [("mr. mime", 122), ("Farfetch'd", 83), ("nidoran♀", 29), ("Flabébé", 669), ("type: null", 772)],
+)
+async def test_busqueda_con_signos(servicio, escrito, esperado):
+    datos = await servicio.buscar(texto=escrito)
+    assert [p["id"] for p in datos["results"]] == [esperado]
+
+
+@pytest.mark.anyio
+async def test_detalle_traduce_el_nombre_antes_de_llamar(servicio):
+    with pytest.raises(Exception):
+        await servicio.get_pokemon("Mr. Mime")  # el simulador responde 404
+    assert servicio.peticiones[-1] == "/api/v2/pokemon/mr-mime"
+
+
+def test_endpoint_acepta_nombres_con_signos(client, auth_headers, servicio):
+    app.dependency_overrides[get_pokeapi_service] = lambda: servicio
+    for q in ("mr. mime", "farfetch'd", "nidoran♀", "Flabébé", "type: null"):
+        r = client.get("/api/v1/pokemon/search", params={"q": q}, headers=auth_headers)
+        assert r.status_code == 200, (q, r.text)
+        assert r.json()["count"] == 1, q
+    r = client.get(
+        "/api/v1/pokemon/search",
+        params={"q": "pikachu", "include_forms": "true"},
+        headers=auth_headers,
+    )
+    assert r.json()["count"] == 3
+
+
+@pytest.mark.parametrize("q", ["../ditto", "pika/chu", "<script>", "a;b"])
+def test_endpoint_sigue_rechazando_lo_raro(client, auth_headers, q):
+    r = client.get("/api/v1/pokemon/search", params={"q": q}, headers=auth_headers)
+    assert r.status_code == 422

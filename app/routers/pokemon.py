@@ -25,8 +25,10 @@ async def buscar_pokemon(
         Query(
             min_length=1,
             max_length=50,
-            pattern=r"^[A-Za-z0-9 -]+$",
-            description="Parte del nombre, p. ej. 'chu' o 'saur'",
+            # Letras (con tilde), números, espacios y los signos de nombres como
+            # «Mr. Mime», «Farfetch'd», «Type: Null» o «Nidoran♀».
+            pattern=r"^[\w .'’:♀♂-]+$",
+            description="Parte del nombre, p. ej. 'chu', 'saur' o 'mr. mime'",
         ),
     ] = None,
     tipo: Annotated[
@@ -39,9 +41,18 @@ async def buscar_pokemon(
     ] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
+    include_forms: Annotated[
+        bool,
+        Query(
+            description="Incluir formas especiales (ids > 1025, p. ej. "
+            "'pikachu-rock-star'). No se pueden añadir a la Pokédex."
+        ),
+    ] = False,
 ):
     """Busca Pokémon por parte del nombre y/o por tipo, ordenados por número."""
-    return await poke.buscar(texto=q, tipo=tipo, limit=limit, offset=offset)
+    return await poke.buscar(
+        texto=q, tipo=tipo, limit=limit, offset=offset, incluir_formas=include_forms
+    )
 
 
 @router.get("/{id_or_name}", response_model=PokemonDetail)
