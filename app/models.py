@@ -87,6 +87,9 @@ class UserCreate(UserBase):
     @field_validator("password")
     @classmethod
     def password_robusta(cls, valor: str) -> str:
+        # Bytes, no caracteres: «ñ» o un emoji ocupan más de uno.
+        if len(valor.encode()) > 72:
+            raise ValueError("la contraseña no puede pasar de 72 bytes")
         if not any(c.isupper() for c in valor):
             raise ValueError("la contraseña necesita una mayúscula")
         if not any(c.isdigit() for c in valor):

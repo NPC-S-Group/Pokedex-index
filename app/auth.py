@@ -17,12 +17,23 @@ from app.config import settings
 # (AttributeError: module 'bcrypt' has no attribute '__about__').
 
 
+# bcrypt solo usa los primeros 72 bytes y bcrypt ≥ 5 lanza un error con más: sin
+# controlarlo, una contraseña larga daba un 500 en el registro y en el login.
+MAX_BYTES_PASSWORD = 72
+
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode(), hashed.encode())
+    datos = password.encode()
+    if len(datos) > MAX_BYTES_PASSWORD:
+        # Ninguna contraseña guardada puede ser tan larga (el registro lo impide):
+        # es incorrecta. Se ejecuta bcrypt igualmente para tardar lo mismo.
+        bcrypt.checkpw(datos[:MAX_BYTES_PASSWORD], hashed.encode())
+        return False
+    return bcrypt.checkpw(datos, hashed.encode())
 
 
 def create_access_token(username: str, user_id: int) -> str:
