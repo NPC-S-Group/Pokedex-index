@@ -14,7 +14,7 @@ Para tests asíncronos del servicio de PokeAPI: @pytest.mark.anyio
 import os
 
 # Antes de importar la app: config.py exige SECRET_KEY.
-os.environ.setdefault("SECRET_KEY", "clave-solo-para-tests")
+os.environ.setdefault("SECRET_KEY", "clave-solo-para-tests-nunca-la-real-0123456789")
 
 import pytest
 from fastapi import HTTPException, status

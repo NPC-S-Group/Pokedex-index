@@ -2,6 +2,7 @@
 
 from typing import Literal
 
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,7 +11,9 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./pokedex.db"
     # Sin valor por defecto, a propósito: si falta en .env, la aplicación no arranca.
-    secret_key: str
+    # Mínimo 32 caracteres: con una clave corta se pueden adivinar por fuerza bruta y
+    # falsificar tokens. Genera una con: python -c "import secrets; print(secrets.token_urlsafe(32))"
+    secret_key: str = Field(min_length=32)
     algorithm: str = "HS256"
     # Corto a propósito: tras el logout el access token deja de valer en 30 min como
     # mucho. Para seguir conectado está el refresh token (7 días).
@@ -25,6 +28,14 @@ class Settings(BaseSettings):
     # la última entrada de X-Forwarded-For, que es la que añade ese proxy.
     trust_proxy: bool = False
     cors_origins: list[str] = ["http://localhost:5173"]
+
+    @field_validator("secret_key")
+    @classmethod
+    def no_es_la_de_ejemplo(cls, valor: str) -> str:
+        # El texto de .env.example es público: copiarlo sin cambiarlo es no tener clave.
+        if valor.startswith("pon-aqui"):
+            raise ValueError("SECRET_KEY sigue siendo la de ejemplo de .env.example")
+        return valor
 
 
 settings = Settings()
