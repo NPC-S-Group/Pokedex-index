@@ -177,8 +177,12 @@ class PokedexStats(SQLModel):
     total_pokemon: int
     captured: int
     favorites: int
-    completion_percentage: float  # % de tu Pokédex que está capturado
+    completion_percentage: float  # % de TU Pokédex que está capturado
+    # % de los 1025 Pokémon de la Pokédex nacional que has capturado.
+    national_dex_percentage: float
+    # Si hay empate, el primero en orden alfabético (ver most_common_types).
     most_common_type: str | None  # None si la Pokédex está vacía
+    most_common_types: list[str]  # todos los empatados en el primer puesto
     capture_streak_days: int  # días seguidos con alguna captura, hasta hoy o ayer
 
 

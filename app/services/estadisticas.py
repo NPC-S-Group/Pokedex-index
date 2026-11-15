@@ -15,10 +15,21 @@ def tipo_mas_comun(tipos_por_pokemon: Iterable[list[str]]) -> str | None:
     Empate: gana el primero en orden alfabético, para que el resultado no cambie
     según el orden en que se lean las filas. Sin tipos: None.
     """
+    empatados = tipos_mas_comunes(tipos_por_pokemon)
+    return empatados[0] if empatados else None
+
+
+def tipos_mas_comunes(tipos_por_pokemon: Iterable[list[str]]) -> list[str]:
+    """Todos los tipos empatados en el primer puesto, en orden alfabético.
+
+    Con charizard (fuego/volador) y pikachu (eléctrico) hay empate a 1 entre los tres:
+    devuelve ["electric", "fire", "flying"]. Sin tipos: [].
+    """
     cuenta = Counter(t for tipos in tipos_por_pokemon for t in tipos or [])
     if not cuenta:
-        return None
-    return min(cuenta, key=lambda tipo: (-cuenta[tipo], tipo))
+        return []
+    maximo = max(cuenta.values())
+    return sorted(tipo for tipo, veces in cuenta.items() if veces == maximo)
 
 
 def _dia(momento: datetime) -> date:

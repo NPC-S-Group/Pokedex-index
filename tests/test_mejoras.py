@@ -248,3 +248,27 @@ def test_endpoint_acepta_nombres_con_signos(client, auth_headers, servicio):
 def test_endpoint_sigue_rechazando_lo_raro(client, auth_headers, q):
     r = client.get("/api/v1/pokemon/search", params={"q": q}, headers=auth_headers)
     assert r.status_code == 422
+
+
+# ─────────────── Estadísticas más claras ───────────────
+
+from app.services.estadisticas import tipo_mas_comun, tipos_mas_comunes  # noqa: E402
+
+
+def test_tipos_empatados():
+    # charizard (fire/flying), pikachu (electric), pecharunt (poison/ghost)
+    tipos = [["fire", "flying"], ["electric"], ["poison", "ghost"]]
+    assert tipos_mas_comunes(tipos) == ["electric", "fire", "flying", "ghost", "poison"]
+    assert tipo_mas_comun(tipos) == "electric"
+    assert tipos_mas_comunes([["fire"], ["fire", "flying"]]) == ["fire"]
+    assert tipos_mas_comunes([]) == []
+
+
+def test_stats_porcentaje_nacional_y_empates(client, auth_headers, test_user, add_to_pokedex):
+    add_to_pokedex(test_user, 4, is_captured=True)  # fire
+    add_to_pokedex(test_user, 25, 7)  # electric, water (sin capturar)
+    datos = client.get("/api/v1/pokedex/stats", headers=auth_headers).json()
+    assert datos["completion_percentage"] == 33.3  # 1 de 3 en TU Pokédex
+    assert datos["national_dex_percentage"] == 0.1  # 1 de 1025
+    assert datos["most_common_types"] == ["electric", "fire", "water"]
+    assert datos["most_common_type"] == "electric"

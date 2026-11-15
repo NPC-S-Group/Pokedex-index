@@ -19,12 +19,13 @@ from app.models import (
     PokedexEntryCreate,
     PokedexEntryRead,
     PokedexEntryUpdate,
+    TOTAL_POKEMON,
     PokedexStats,
     Team,
     TeamMember,
     ahora,
 )
-from app.services.estadisticas import racha_de_capturas, tipo_mas_comun
+from app.services.estadisticas import racha_de_capturas, tipos_mas_comunes
 from app.services.export_service import pokedex_a_csv, pokedex_a_pdf
 from app.versionado import obsoleta_en_v1
 
@@ -180,12 +181,15 @@ def estadisticas(request: Request, usuario: CurrentUser, session: SessionDep):
     fechas = session.exec(
         select(PokedexEntry.capture_date).where(mias, PokedexEntry.is_captured)
     ).all()
+    empatados = tipos_mas_comunes(tipos)
     return {
         "total_pokemon": total,
         "captured": capturados,
         "favorites": favoritos,
         "completion_percentage": porcentaje,
-        "most_common_type": tipo_mas_comun(tipos),
+        "national_dex_percentage": round(100 * capturados / TOTAL_POKEMON, 1),
+        "most_common_type": empatados[0] if empatados else None,
+        "most_common_types": empatados,
         "capture_streak_days": racha_de_capturas(fechas, datetime.now(UTC).date()),
     }
 

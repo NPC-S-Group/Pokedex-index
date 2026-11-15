@@ -121,7 +121,9 @@ def test_stats_completas(client, auth_headers, test_user, add_to_pokedex):
         "captured": 2,
         "favorites": 0,
         "completion_percentage": 50.0,
+        "national_dex_percentage": 0.2,  # 2 de 1025
         "most_common_type": "normal",
+        "most_common_types": ["normal"],
         "capture_streak_days": 2,
     }
 
