@@ -1,6 +1,6 @@
 [project]
 name = "pokedex-api"
-version = "0.1.0"
+version = "1.0.3"
 description = "API REST del Pokédex personal · Práctica 1 de Sistemas de Información (UFV)"
 readme = "README.md"
 requires-python = ">=3.12"
