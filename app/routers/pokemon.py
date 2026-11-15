@@ -75,5 +75,6 @@ async def ficha_pokemon(
     return Response(
         content=pdf,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{nombre}.pdf"'},
+        # attachment: el navegador (y Swagger, con «Download file») lo descarga como fichero.
+        headers={"Content-Disposition": f'attachment; filename="{nombre}.pdf"'},
     )
