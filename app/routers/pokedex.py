@@ -20,6 +20,7 @@ from app.models import (
     PokedexEntryRead,
     PokedexEntryUpdate,
     PokedexStats,
+    Team,
     TeamMember,
     ahora,
 )
@@ -236,11 +237,28 @@ def actualizar(
 @limiter.limit(LIMITE_AUTENTICADO)
 def borrar(request: Request, entry_id: int, usuario: CurrentUser, session: SessionDep):
     entrada = _entrada_propia(session, entry_id, usuario)
-    # Si estaba en algún equipo, sale también de él: no dejamos miembros huérfanos.
-    for miembro in session.exec(
+    miembros = session.exec(
         select(TeamMember).where(TeamMember.pokedex_entry_id == entrada.id)
-    ):
+    ).all()
+    # Un equipo siempre tiene de 1 a 6 Pokémon: si este es el único de algún equipo,
+    # no se borra (409). Hay que quitarlo antes del equipo o borrar el equipo.
+    equipos = [session.get(Team, m.team_id) for m in miembros]
+    se_quedarian_vacios = [t.name for t in equipos if len(t.members) == 1]
+    if se_quedarian_vacios:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Es el único Pokémon de estos equipos: "
+            f"{', '.join(se_quedarian_vacios)}. Cámbialo o borra el equipo antes.",
+        )
+    # Si estaba en otros equipos, sale de ellos y el resto se renumera (1, 2, 3…).
+    for miembro, equipo in zip(miembros, equipos):
         session.delete(miembro)
+        restantes = sorted(
+            (m for m in equipo.members if m.id != miembro.id), key=lambda m: m.position
+        )
+        for posicion, m in enumerate(restantes, start=1):
+            m.position = posicion
+            session.add(m)
     session.delete(entrada)
     session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

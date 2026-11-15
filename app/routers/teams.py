@@ -149,6 +149,9 @@ async def exportar(
 ):
     """Equipo en PDF: portada con estadísticas combinadas y la ficha de cada Pokémon."""
     equipo = _a_respuesta(session, _equipo_propio(session, team_id, usuario))
+    if not equipo.members:
+        # Solo puede pasar con equipos guardados antes de exigir siempre 1 a 6.
+        raise HTTPException(status.HTTP_409_CONFLICT, "El equipo no tiene Pokémon")
     # Los datos y las imágenes de los (hasta 6) miembros se piden a la vez.
     pokemons = await asyncio.gather(
         *(poke.get_pokemon(m.pokemon_id) for m in equipo.members)
