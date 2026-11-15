@@ -88,3 +88,27 @@ def test_cors_origen_no_permitido(client):
         headers={"Origin": "https://malicioso.example", "Access-Control-Request-Method": "GET"},
     )
     assert "access-control-allow-origin" not in r.headers
+
+
+# ───────────── IP real detrás de un proxy (Render) ─────────────
+# Los casos de ip_cliente con 0, 1 y 2 proxies están en tests/test_seguridad.py.
+
+from app.config import settings
+
+
+def test_con_proxy_cada_cliente_tiene_su_limite(client, monkeypatch):
+    monkeypatch.setattr(settings, "trusted_proxy_hops", 1)
+    login = "/api/v1/auth/login"
+
+    def intento(i, xff):
+        # Un usuario distinto cada vez: así salta el límite por IP, no el de cuenta.
+        datos = {"username": f"u{i}", "password": "Mala12345"}
+        return client.post(login, data=datos, headers={"X-Forwarded-For": xff})
+
+    for i in range(10):
+        intento(i, "198.51.100.1")
+    assert intento(10, "198.51.100.1").status_code == 429
+    # Otro usuario (otra IP real) no queda bloqueado por el primero.
+    assert intento(11, "198.51.100.2").status_code == 401
+    # Inventarse la primera IP no sirve para saltarse el límite.
+    assert intento(12, "9.9.9.9, 198.51.100.1").status_code == 429

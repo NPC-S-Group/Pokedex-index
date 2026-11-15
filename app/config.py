@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # cualquiera que lea el repositorio podría firmar tokens válidos.
 _CLAVES_DE_EJEMPLO = {
     "pon-aqui-una-clave-larga-y-aleatoria",
+    "pon-aqui-una-clave-aleatoria-de-al-menos-32-caracteres",
     "cambia-esto-por-una-clave-larga-y-aleatoria",
 }
 
@@ -41,7 +42,8 @@ class Settings(BaseSettings):
     @field_validator("secret_key")
     @classmethod
     def clave_no_de_ejemplo(cls, valor: str) -> str:
-        if valor in _CLAVES_DE_EJEMPLO:
+        # startswith: cubre también futuras variantes del texto de ejemplo «pon-aqui-…».
+        if valor in _CLAVES_DE_EJEMPLO or valor.startswith("pon-aqui"):
             raise ValueError("SECRET_KEY es la de ejemplo: genera una clave propia")
         return valor
 

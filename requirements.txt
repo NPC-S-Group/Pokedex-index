@@ -2,6 +2,8 @@
 #   uv lock --upgrade && uv export --no-dev --no-hashes --no-emit-project -o requirements.txt
 #   uv export --only-dev --no-hashes --no-emit-project -o requirements-dev.txt
 # Así todos (CI, Docker, Render y vuestro portátil) instalan exactamente lo mismo.
+# Con «>=» cada build cogía lo último sin avisar; ya nos pasó: FastAPI 0.16x
+# cambió cómo guarda las rutas y los límites por defecto de slowapi dejaron de aplicarse.
 # bcrypt se usa directamente: passlib falla con bcrypt >= 4.1.
 
 agent-detector==2.0.0
@@ -14,6 +16,7 @@ annotated-types==0.8.0
     # via pydantic
 anyio==4.15.1
     # via
+    #   fastapi
     #   httpx
     #   httpx2
     #   starlette
@@ -50,7 +53,7 @@ email-validator==2.3.0
     # via
     #   fastapi
     #   pydantic
-fastapi==0.148.0
+fastapi==0.163.1
     # via pokedex-api
 fastapi-cli==0.0.32
     # via fastapi
@@ -154,7 +157,7 @@ pydantic-core==2.50.1
     # via pydantic
 pydantic-extra-types==2.11.1
     # via fastapi
-pydantic-settings==2.16.0
+pydantic-settings==2.16.3
     # via
     #   fastapi
     #   pokedex-api
@@ -196,7 +199,7 @@ slowapi==0.1.10
     # via pokedex-api
 sqlalchemy==2.1.5
     # via sqlmodel
-sqlmodel==0.0.48
+sqlmodel==0.0.50
     # via pokedex-api
 starlette==1.9.0
     # via fastapi

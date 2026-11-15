@@ -1,83 +1,28 @@
 """Tests de los arreglos de la revisión de seguridad.
 
-Contraseñas de más de 72 bytes, IP real detrás del proxy, límite de login por
-cuenta, SECRET_KEY mínima, cabeceras de seguridad y limpieza de refresh tokens.
+IP real detrás del proxy, límite de login por cuenta, cabeceras de seguridad y
+limpieza de refresh tokens.
 """
 
 from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
-from pydantic import ValidationError
 from sqlmodel import select
 
 from app import limits
-from app.auth import hash_password, verify_password
-from app.config import Settings
 from app.models import RefreshToken, ahora
 from app.routers.auth import borrar_refresh_caducados
 from tests.conftest import PASSWORD
 
-REGISTRO = "/api/v1/auth/register"
 LOGIN = "/api/v1/auth/login"
-
-
-def registrar(client, password: str):
-    return client.post(
-        REGISTRO,
-        json={"username": "misty", "email": "misty@test.com", "password": password},
-    )
 
 
 def login(client, username="ash", password=PASSWORD):
     return client.post(LOGIN, data={"username": username, "password": password})
 
 
-# --- Contraseñas de más de 72 bytes (antes: error 500) ---------------------------
-
-
-def test_registro_con_73_bytes_da_422_y_no_500(client):
-    r = registrar(client, "Aa1" + "x" * 70)  # 73 bytes
-    assert r.status_code == 422
-    assert "72 bytes" in r.text
-
-
-def test_cuentan_bytes_no_letras(client):
-    # 40 letras, pero «ñ» ocupa 2 bytes: 3 + 37*2 = 77 bytes.
-    r = registrar(client, "Aa1" + "ñ" * 37)
-    assert r.status_code == 422
-
-
-def test_72_bytes_justos_se_aceptan(client):
-    r = registrar(client, "Aa1" + "x" * 69)  # 72 bytes
-    assert r.status_code == 201, r.text
-    assert login(client, "misty", "Aa1" + "x" * 69).status_code == 200
-
-
-def test_login_con_contrasena_enorme_da_401_y_no_500(client, test_user):
-    assert login(client, password="A" * 500).status_code == 401
-
-
-def test_las_funciones_de_auth_no_revientan():
-    larga = "x" * 73
-    with pytest.raises(ValueError):
-        hash_password(larga)
-    assert verify_password(larga, hash_password("corta")) is False
-
-
-# --- SECRET_KEY ---------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "clave", ["corta", "x" * 31, "pon-aqui-una-clave-larga-y-aleatoria"]
-)
-def test_secret_key_debil_no_arranca(clave):
-    with pytest.raises(ValidationError):
-        Settings(secret_key=clave, _env_file=None)
-
-
-def test_secret_key_de_32_caracteres_vale():
-    assert Settings(secret_key="x" * 32, _env_file=None).secret_key == "x" * 32
+# Contraseñas de más de 72 bytes: tests/test_auth.py. SECRET_KEY: tests/test_config.py.
 
 
 # --- IP real detrás del proxy ------------------------------------------------------
@@ -170,8 +115,15 @@ def test_cabeceras_en_la_api(client):
     assert r.headers["X-Content-Type-Options"] == "nosniff"
     assert r.headers["X-Frame-Options"] == "DENY"
     assert r.headers["Referrer-Policy"] == "no-referrer"
-    assert "max-age=31536000" in r.headers["Strict-Transport-Security"]
     assert r.headers["Content-Security-Policy"].startswith("default-src 'none'")
+
+
+def test_hsts_solo_por_https(client):
+    # Por HTTP (local) no se manda HSTS…
+    assert "Strict-Transport-Security" not in client.get("/health").headers
+    # …y detrás de un proxy HTTPS (Render) sí.
+    r = client.get("/health", headers={"X-Forwarded-Proto": "https"})
+    assert r.headers["Strict-Transport-Security"].startswith("max-age=31536000")
 
 
 def test_docs_sin_csp_para_que_swagger_cargue(client):

@@ -15,8 +15,8 @@ pluggy==1.7.0
     #   pytest-cov
 pygments==2.21.0
     # via pytest
-pypdf==7.0.1
-pytest==9.1.1
+pypdf==7.1.0
+pytest==9.2.0
     # via pytest-cov
 pytest-cov==7.1.0
 ruff==0.17.1
