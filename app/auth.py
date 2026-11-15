@@ -1,5 +1,11 @@
-"""Contraseñas (bcrypt) y testigos (JWT)."""
+"""Contraseñas (bcrypt) y testigos (JWT).
 
+Dos tipos de JWT, distinguidos por el claim «type»:
+- access (30 min): va en cada petición, en la cabecera Authorization.
+- refresh (7 días): solo sirve para pedir un par nuevo en /auth/refresh.
+"""
+
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import bcrypt
@@ -25,13 +31,33 @@ def create_access_token(username: str, user_id: int) -> str:
     payload = {
         "sub": username,
         "user_id": user_id,
+        "type": "access",
         "iat": ahora,
         "exp": ahora + timedelta(minutes=minutos),
     }
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
 
+def create_refresh_token(username: str, user_id: int) -> tuple[str, str, datetime]:
+    """Devuelve (token, jti, caducidad). El jti identifica el token en la tabla
+    RefreshToken, para poder anularlo (rotación, logout o reutilización)."""
+    ahora = datetime.now(UTC)
+    caduca = ahora + timedelta(days=settings.refresh_token_expire_days)
+    jti = uuid.uuid4().hex
+    payload = {
+        "sub": username,
+        "user_id": user_id,
+        "type": "refresh",
+        "jti": jti,
+        "iat": ahora,
+        "exp": caduca,
+    }
+    token = jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
+    return token, jti, caduca
+
+
 def decode_access_token(token: str) -> dict | None:
+    """Comprueba firma y caducidad de cualquiera de nuestros JWT; el tipo lo mira quien llama."""
     try:
         return jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
     except JWTError:

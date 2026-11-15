@@ -14,13 +14,16 @@ El CI exige **cobertura ≥ 80 %**. El enunciado pide **mínimo 15 tests**.
 | `test_teams_export.py` | Equipo en PDF: páginas, cabeceras, propiedad, imágenes y estadísticas combinadas | 8 | #13 |
 | `test_rate_limit_cors.py` | 429 de cada nivel y CORS | 8 | #9 |
 | `test_auth.py` | Registro, login, token y usuario actual | 30 | #4 Miguel |
+| `test_refresh.py` | Refresh tokens: par en el login, rotación, reutilización, tipos separados, caducidad, logout y 429 | 27 | mejora de #4 Miguel |
 | `test_pokedex.py` | CRUD, filtros, orden, paginación y propiedad | 41 | #7 Miguel |
 | `test_stats.py` | `/stats`: tipo más común (empates, doble tipo), racha (huecos, hoy o ayer, zona horaria), tipos guardados y la columna nueva en una BD antigua | 26 | #12 Henar |
 | `test_export.py` | Exportar a CSV y PDF: filtros, orden, sin paginar, inyección CSV, caracteres raros y 429 | 22 | #11 Miguel |
 | `test_api_v2.py` | API v2: forma de la respuesta, sobre de paginación, filtros, propiedad, que la v1 no cambia y 429 | 19 | #14 Miguel |
+| `test_versionado.py` | Deprecación de la v1: cabeceras, Swagger, log, CORS, rutas sin sucesora y `410` desde la fecha de retirada | 11 | mejora de #14 Miguel |
 | `test_pokeapi_service.py` | Servicio con mock: OK, errores, timeouts y logging | 31 | #5 Henar |
 | `test_pokemon.py` | Búsqueda (nombre, tipo, paginación, caché), detalle y ficha PDF, con la PokeAPI simulada | 37 | #8 Henar |
 | `test_logging.py` | Logging de peticiones, auth, 422 y 429; que no se filtren contraseñas ni tokens | 22 | #10 Henar |
+| `test_mejoras.py` | Mejoras de la revisión del 15 nov: equipos nunca vacíos, nombres y motes limpios, sin fechas futuras, nombres de Pokémon con signos, búsqueda sin formas especiales y estadísticas con empates | 41 | Jorge |
 
 **Avance:** el número de tests y la cobertura de cada cambio se ven en el CI (pestaña *Actions* de cada PR) y en las notas de cada release. Así no hay que editar esta línea en cada PR, que provocaba conflictos.
 

@@ -283,7 +283,7 @@ def test_ficha_en_pdf(client, auth_headers, pokeapi):
     r = client.get("/api/v1/pokemon/25/card", headers=auth_headers)
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/pdf"
-    assert r.headers["content-disposition"] == 'inline; filename="pikachu.pdf"'
+    assert r.headers["content-disposition"] == 'attachment; filename="pikachu.pdf"'
     assert r.content.startswith(b"%PDF-")
     assert r.content.rstrip().endswith(b"%%EOF")
     assert b"Ficha de Pikachu" in r.content  # título del documento

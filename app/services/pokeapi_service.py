@@ -17,6 +17,7 @@ Todo queda registrado en el logger "pokedex_api.pokeapi".
 
 import logging
 import re
+import unicodedata
 import time
 from typing import ClassVar
 from urllib.parse import urlparse
@@ -24,10 +25,26 @@ from urllib.parse import urlparse
 import httpx
 from fastapi import HTTPException, status
 
+from app.models import TOTAL_POKEMON  # ids 1-1025; las formas especiales van aparte
+
 logger = logging.getLogger("pokedex_api.pokeapi")
 
 # Nombres de la PokeAPI: minúsculas, dígitos y guiones (p. ej. "mr-mime", "porygon2").
 _IDENTIFICADOR_VALIDO = re.compile(r"^[a-z0-9-]+$")
+
+
+def nombre_a_slug(texto: int | str) -> str:
+    """Traduce un nombre como lo escribe una persona al formato de la PokeAPI.
+
+    «Mr. Mime» → «mr-mime», «Farfetch'd» → «farfetchd», «Nidoran♀» → «nidoran-f»,
+    «Flabébé» → «flabebe», «Type: Null» → «type-null», « PIKACHU » → «pikachu».
+    """
+    t = str(texto).strip().lower().replace("♀", "-f").replace("♂", "-m")
+    # Quita tildes: «é» se descompone en «e» + acento y el acento se descarta.
+    t = "".join(c for c in unicodedata.normalize("NFKD", t) if not unicodedata.combining(c))
+    t = re.sub(r"['’]", "", t)
+    t = re.sub(r"[\s._:]+", "-", t)  # espacios, puntos, dos puntos → guion
+    return re.sub(r"-{2,}", "-", t).strip("-")
 _STATS = ("hp", "attack", "defense", "special-attack", "special-defense", "speed")
 
 # La lista de nombres apenas cambia (sale un juego nuevo cada pocos años), así que
@@ -90,16 +107,23 @@ class PokeAPIService:
         tipo: str | None = None,
         limit: int = 20,
         offset: int = 0,
+        incluir_formas: bool = False,
     ) -> dict:
-        """Busca por parte del nombre y/o por tipo. Devuelve una página ordenada por id."""
+        """Busca por parte del nombre y/o por tipo. Devuelve una página ordenada por id.
+
+        Por defecto deja fuera las formas especiales (id > 1025, p. ej.
+        «pikachu-rock-star»): no se pueden añadir a la Pokédex.
+        """
         candidatos = (
             await self._pokemon_de_tipo(tipo)
             if tipo
             else await self._todos_los_nombres()
         )
+        if not incluir_formas:
+            candidatos = [p for p in candidatos if p["id"] <= TOTAL_POKEMON]
         if texto:
-            # "Mr Mime" → "mr-mime": la PokeAPI usa guiones en vez de espacios.
-            aguja = texto.strip().lower().replace(" ", "-")
+            # «Mr. Mime» → «mr-mime»: el mismo formato que usa la PokeAPI.
+            aguja = nombre_a_slug(texto)
             candidatos = [p for p in candidatos if aguja in p["name"]]
         candidatos = sorted(candidatos, key=lambda p: p["id"])
         pagina = candidatos[offset : offset + limit]
@@ -184,7 +208,12 @@ class PokeAPIService:
 
     @staticmethod
     def _normalizar(identificador: int | str, que: str = "Pokémon") -> str:
-        clave = str(identificador).strip().lower()
+        # Los nombres de Pokémon se traducen («Mr. Mime» → «mr-mime»); los tipos
+        # («fire», «water»…) no tienen signos y se validan tal cual.
+        if que == "Pokémon":
+            clave = nombre_a_slug(identificador)
+        else:
+            clave = str(identificador).strip().lower()
         if not _IDENTIFICADOR_VALIDO.fullmatch(clave):
             logger.warning("identificador no válido: %r", identificador)
             raise HTTPException(
