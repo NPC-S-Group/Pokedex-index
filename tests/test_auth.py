@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from jose import jwt
 from sqlmodel import select
 
@@ -255,7 +256,6 @@ def test_login_mismo_error_sea_cual_sea_el_fallo(client, session, test_user):
         "usuario no existe": ("nadie", PASSWORD),
         "contraseña mala": (test_user.username, "Mala12345"),
         "los dos mal": ("nadie", "Mala12345"),
-        "mayúsculas en el usuario": (test_user.username.upper(), PASSWORD),
         "cuenta desactivada": ("misty", PASSWORD),
     }
     respuestas = {nombre: _intento(client, *datos) for nombre, datos in casos.items()}
@@ -304,3 +304,63 @@ def test_login_tarda_lo_mismo_exista_o_no_el_usuario(client, test_user):
 
     no_existe, existe = mediana("nadie"), mediana(test_user.username)
     assert 1 / 3 < no_existe / existe < 3, (no_existe, existe)
+
+
+# ───────────────────── Mayúsculas y nombres limpios (mejoras) ─────────────────────
+
+
+def test_email_sin_distinguir_mayusculas(client):
+    r = _registrar(client, username="misty", email="  Misty@Test.COM ")
+    assert r.status_code == 201, r.text
+    # Se guarda en minúsculas y sin espacios.
+    assert r.json()["email"] == "misty@test.com"
+    # El mismo correo escrito de otra forma ya existe.
+    assert _registrar(client, username="otra", email="MISTY@test.com").status_code == 409
+
+
+def test_usuario_sin_distinguir_mayusculas(client):
+    assert _registrar(client, username="Misty").status_code == 201
+    r = _registrar(client, username="misty", email="otra@test.com")
+    assert r.status_code == 409
+    r = _registrar(client, username="MISTY", email="otra2@test.com")
+    assert r.status_code == 409
+
+
+def test_login_sin_distinguir_mayusculas(client):
+    r = _registrar(client, username="Misty")
+    assert r.json()["username"] == "Misty"  # se muestra tal y como se escribió
+    for escrito in ("Misty", "misty", "MISTY", "mIsTy", " misty "):
+        r = client.post(LOGIN, data={"username": escrito, "password": PASSWORD})
+        assert r.status_code == 200, escrito
+        me = client.get(ME, headers=_bearer(r.json()["access_token"]))
+        assert me.json()["username"] == "Misty"
+
+
+def test_indice_unico_sin_mayusculas_en_la_bd(session, test_user):
+    # Aunque alguien se salte la comprobación de la API, la BD no deja duplicar.
+    from sqlalchemy.exc import IntegrityError
+
+    session.add(
+        User(
+            username=test_user.username.upper(),
+            email="otro@test.com",
+            hashed_password="x",
+        )
+    )
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+
+
+@pytest.mark.parametrize(
+    "username",
+    ["   ", "  ab  ", "a b", "a\tb", "ab\nc", "ash!", "ñandú"],
+)
+def test_usuario_con_espacios_o_signos_raros(client, username):
+    assert _registrar(client, username=username).status_code == 422
+
+
+def test_usuario_con_espacios_en_los_extremos_se_limpia(client):
+    r = _registrar(client, username="  misty_92  ")
+    assert r.status_code == 201
+    assert r.json()["username"] == "misty_92"

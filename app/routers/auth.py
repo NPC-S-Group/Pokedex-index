@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import or_, select, update
+from sqlmodel import func, or_, select, update
 
 from app.auth import (
     create_access_token,
@@ -46,7 +46,10 @@ _HASH_FALSO = hash_password("usuario-que-no-existe-" + "x" * 16)
 def registrar(request: Request, datos: UserCreate, session: SessionDep):
     repetido = session.exec(
         select(User).where(
-            or_(User.username == datos.username, User.email == datos.email)
+            or_(
+                func.lower(User.username) == datos.username.lower(),
+                func.lower(User.email) == datos.email,
+            )
         )
     ).first()
     if repetido:
@@ -119,7 +122,12 @@ def login(
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
     session: SessionDep,
 ):
-    usuario = session.exec(select(User).where(User.username == form.username)).first()
+    # Sin distinguir mayúsculas: «Ash», «ash» y «ASH» entran en la misma cuenta.
+    usuario = session.exec(
+        select(User).where(
+            func.lower(User.username) == form.username.strip().lower()
+        )
+    ).first()
     # bcrypt se ejecuta SIEMPRE, exista o no el usuario: mismo mensaje y mismo tiempo.
     hash_guardado = usuario.hashed_password if usuario else _HASH_FALSO
     clave_correcta = verify_password(form.password, hash_guardado)
