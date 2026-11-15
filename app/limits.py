@@ -33,7 +33,7 @@ def ip_cliente(request: Request) -> str:
     la parte de la izquierda la escribe el cliente y puede inventársela. Por eso
     se cuenta desde la DERECHA: la última entrada la añadió nuestro proxy.
     """
-    saltos = settings.trusted_proxy_hops
+    saltos = settings.saltos_proxy
     if saltos:
         cabecera = request.headers.get("x-forwarded-for", "")
         ips = [ip.strip() for ip in cabecera.split(",") if ip.strip()]

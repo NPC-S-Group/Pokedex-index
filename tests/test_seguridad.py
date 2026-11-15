@@ -50,6 +50,23 @@ def test_ip_cliente(monkeypatch, saltos, xff, esperada):
     assert limits.ip_cliente(peticion(xff)) == esperada
 
 
+@pytest.mark.parametrize(
+    "hops, trust, saltos", [(0, False, 0), (0, True, 1), (2, True, 2), (1, False, 1)]
+)
+def test_trust_proxy_equivale_a_un_salto(hops, trust, saltos):
+    from app.config import Settings
+
+    ajustes = Settings(
+        secret_key="x" * 32, trusted_proxy_hops=hops, trust_proxy=trust, _env_file=None
+    )
+    assert ajustes.saltos_proxy == saltos
+
+
+def test_trust_proxy_true_usa_la_ip_de_render(monkeypatch):
+    monkeypatch.setattr(limits.settings, "trust_proxy", True)
+    assert limits.ip_cliente(peticion("6.6.6.6, 1.1.1.1")) == "1.1.1.1"
+
+
 def test_detras_del_proxy_cada_ip_tiene_su_limite(client, monkeypatch):
     # Antes, todos llegaban con la IP del proxy y compartían los 10 logins/minuto.
     monkeypatch.setattr(limits.settings, "trusted_proxy_hops", 1)

@@ -38,7 +38,7 @@ Copia `.env.example` como `.env` y rellena los valores:
 | `POKEAPI_TIMEOUT` | Opcional. Segundos de espera a la PokeAPI antes de responder 504 (por defecto 5) |
 | `LOG_LEVEL` | Opcional. Nivel de log: `DEBUG`, `INFO`, `WARNING` o `ERROR` (por defecto `INFO`) |
 | `LOG_FILE` | Opcional. Archivo de log además de la consola (por defecto `pokedex_api.log`; vacío = solo consola) |
-| `TRUSTED_PROXY_HOPS` | Opcional. Cuántos proxies hay delante de la API (por defecto `0`, en local y en el homelab). En Render, `1`: así el límite de peticiones y los logs usan la IP real de cada usuario y no la del proxy |
+| `TRUSTED_PROXY_HOPS` | Opcional. Cuántos proxies hay delante de la API (por defecto `0`, en local y en el homelab). En Render, `1`: así el límite de peticiones y los logs usan la IP real de cada usuario y no la del proxy. `TRUST_PROXY=true` es un atajo que equivale a `1` |
 
 ## Ejecución
 **En local** (con el `.env` configurado):

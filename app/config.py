@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     # usa la IP de la conexión; con N, la N-ésima empezando por la derecha de
     # X-Forwarded-For, que es la que añadió nuestro proxy y el cliente no puede falsear.
     trusted_proxy_hops: int = Field(default=0, ge=0, le=5)
+    # Atajo: TRUST_PROXY=true equivale a TRUSTED_PROXY_HOPS=1 (un proxy, Render).
+    trust_proxy: bool = False
+
+    @property
+    def saltos_proxy(self) -> int:
+        return self.trusted_proxy_hops or (1 if self.trust_proxy else 0)
 
     @field_validator("secret_key")
     @classmethod
