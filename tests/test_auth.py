@@ -364,3 +364,33 @@ def test_usuario_con_espacios_en_los_extremos_se_limpia(client):
     r = _registrar(client, username="  misty_92  ")
     assert r.status_code == 201
     assert r.json()["username"] == "misty_92"
+
+
+# ───────────────────── Contraseñas largas (límite de bcrypt) ─────────────────────
+
+
+def test_registro_con_contrasena_de_mas_de_72_bytes(client):
+    r = _registrar(client, password="A1" + "x" * 71)  # 73 bytes
+    assert r.status_code == 422
+    assert "72 bytes" in r.text
+
+
+def test_registro_con_contrasena_de_72_bytes_justos(client):
+    assert _registrar(client, password="A1" + "x" * 70).status_code == 201
+
+
+def test_limite_en_bytes_no_en_caracteres(client):
+    # 37 «ñ» son 37 caracteres pero 74 bytes.
+    assert _registrar(client, password="A1" + "ñ" * 36).status_code == 422
+
+
+def test_login_con_contrasena_larga_es_401_no_500(client, test_user):
+    for usuario in (test_user.username, "nadie"):
+        r = client.post(LOGIN, data={"username": usuario, "password": "A1" + "x" * 200})
+        assert r.status_code == 401, usuario
+        assert r.json()["detail"] == "Usuario o contraseña incorrectos"
+
+
+def test_verify_password_larga_devuelve_false():
+    guardado = hash_password("Corta123")
+    assert verify_password("Corta123" + "x" * 100, guardado) is False

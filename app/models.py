@@ -7,6 +7,8 @@ from pydantic import EmailStr, field_validator
 from sqlalchemy import JSON, Column, Index, UniqueConstraint, func
 from sqlmodel import Field, Relationship, SQLModel
 
+from app.contrasenas import BCRYPT_MAX_BYTES, demasiado_larga
+
 
 def ahora() -> datetime:
     return datetime.now(UTC)
@@ -91,6 +93,12 @@ class UserCreate(UserBase):
             raise ValueError("la contraseña necesita una mayúscula")
         if not any(c.isdigit() for c in valor):
             raise ValueError("la contraseña necesita un número")
+        if demasiado_larga(valor):
+            # Límite de bcrypt (ver app/auth.py). Sin esto, el registro daba un 500.
+            raise ValueError(
+                f"la contraseña no puede pasar de {BCRYPT_MAX_BYTES} bytes "
+                "(las letras con tilde o la ñ ocupan 2)"
+            )
         return valor
 
 
