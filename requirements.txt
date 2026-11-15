@@ -1,23 +1,26 @@
-# Mismas dependencias que pyproject.toml (lo usa el CI con pip).
+# Versiones exactas (==): Docker, el CI y Render instalan siempre lo mismo.
+# Con «>=» cada build cogía lo último sin avisar; ya nos pasó: FastAPI 0.16x
+# cambió cómo guarda las rutas y los límites por defecto de slowapi dejaron de
+# aplicarse. Para actualizar: subir la versión aquí, pasar los tests y hacer un PR.
 # bcrypt se usa directamente: passlib falla con bcrypt >= 4.1.
 
 # API
-fastapi[standard]>=0.148.0
-sqlmodel>=0.0.48
-pydantic-settings>=2.16.0
+fastapi[standard]==0.163.1
+sqlmodel==0.0.50
+pydantic-settings==2.16.3
 
 # Seguridad
-bcrypt>=5.0.0
-python-jose[cryptography]>=3.5.0
+bcrypt==5.0.0
+python-jose[cryptography]==3.5.0
 
 # Rate limiting y cliente de PokeAPI
-slowapi>=0.1.10
-httpx>=0.28.1
+slowapi==0.1.10
+httpx==0.28.1
 
 # PDF: fichas (#8), equipos (#13) y Pokédex (#11)
-fpdf2>=2.8
+fpdf2==2.9.0
 
 # Tests
-pytest>=9.1.1
-pytest-cov>=7.1.0
-pypdf>=5  # leer el PDF generado en tests/test_export.py
+pytest==9.2.0
+pytest-cov==7.1.0
+pypdf==7.1.0  # leer el PDF generado en tests/test_export.py
