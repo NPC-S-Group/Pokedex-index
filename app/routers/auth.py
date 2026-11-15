@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import func, or_, select, update
+from sqlmodel import delete, func, or_, select, update
 
 from app.auth import (
     create_access_token,
@@ -85,6 +85,13 @@ def registrar(request: Request, datos: UserCreate, session: SessionDep):
 def _emitir_par(session, usuario: User) -> TokenPair:
     """Access token (30 min) + refresh token (7 días), guardando el refresh en la BD."""
     refresh, jti, caduca = create_refresh_token(usuario.username, usuario.id)
+    # De paso, se borran los refresh tokens caducados de este usuario: si no, la
+    # tabla crece sin límite (uno por cada login o renovación).
+    session.execute(
+        delete(RefreshToken).where(
+            RefreshToken.user_id == usuario.id, RefreshToken.expires_at < ahora()
+        )
+    )
     session.add(RefreshToken(jti=jti, user_id=usuario.id, expires_at=caduca))
     session.commit()
     return TokenPair(

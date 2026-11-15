@@ -4,7 +4,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
@@ -56,6 +56,24 @@ app.add_middleware(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, registrar_limite_superado)
 app.add_middleware(SlowAPIMiddleware)
+
+
+@app.middleware("http")
+async def cabeceras_de_seguridad(request: Request, call_next):
+    """Cabeceras que los navegadores entienden como «no te arriesgues»."""
+    respuesta = await call_next(request)
+    cabeceras = respuesta.headers
+    cabeceras.setdefault("X-Content-Type-Options", "nosniff")  # no adivinar el tipo
+    cabeceras.setdefault("X-Frame-Options", "DENY")  # no meter la API en un iframe
+    cabeceras.setdefault("Referrer-Policy", "no-referrer")
+    # HSTS solo por HTTPS (Render): «la próxima vez, ven directamente por HTTPS».
+    https = request.url.scheme == "https" or (
+        request.headers.get("x-forwarded-proto", "").split(",")[-1].strip() == "https"
+    )
+    if https:
+        cabeceras.setdefault("Strict-Transport-Security", "max-age=31536000")
+    return respuesta
+
 
 # Logging (app/logs.py): se añade el último para ser el más externo y ver todas
 # las respuestas, también las de CORS y las 429.

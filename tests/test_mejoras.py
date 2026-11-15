@@ -272,3 +272,38 @@ def test_stats_porcentaje_nacional_y_empates(client, auth_headers, test_user, ad
     assert datos["national_dex_percentage"] == 0.1  # 1 de 1025
     assert datos["most_common_types"] == ["electric", "fire", "water"]
     assert datos["most_common_type"] == "electric"
+
+
+# ─────────────── Seguridad: cabeceras y limpieza de refresh tokens ───────────────
+
+
+def test_cabeceras_de_seguridad(client):
+    r = client.get("/health")
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert r.headers["x-frame-options"] == "DENY"
+    assert r.headers["referrer-policy"] == "no-referrer"
+    # Por HTTP (local) no se manda HSTS…
+    assert "strict-transport-security" not in r.headers
+    # …y detrás de un proxy HTTPS (Render) sí.
+    r = client.get("/health", headers={"X-Forwarded-Proto": "https"})
+    assert r.headers["strict-transport-security"] == "max-age=31536000"
+
+
+def test_el_login_borra_los_refresh_caducados(client, session, test_user):
+    from sqlmodel import select
+
+    from app.models import RefreshToken
+    from tests.conftest import PASSWORD
+
+    viejo = RefreshToken(
+        jti="caducado" + "0" * 24,
+        user_id=test_user.id,
+        expires_at=datetime.now(UTC) - timedelta(days=1),
+    )
+    session.add(viejo)
+    session.commit()
+    jti_viejo = viejo.jti
+    client.post("/api/v1/auth/login", data={"username": test_user.username, "password": PASSWORD})
+    jtis = session.exec(select(RefreshToken.jti).where(RefreshToken.user_id == test_user.id)).all()
+    assert jti_viejo not in jtis
+    assert len(jtis) == 1  # solo el del login nuevo
