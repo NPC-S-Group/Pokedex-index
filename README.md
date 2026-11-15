@@ -32,12 +32,13 @@ Copia `.env.example` como `.env` y rellena los valores:
 
 | Variable | Para qué sirve |
 |---|---|
-| `SECRET_KEY` | **Obligatoria.** Clave para firmar los JWT. Genera una con `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
+| `SECRET_KEY` | **Obligatoria, mínimo 32 caracteres.** Clave para firmar los JWT. La API no arranca si es más corta o si sigue siendo la de `.env.example`. Genera una con `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
 | `DATABASE_URL` | Conexión a la base de datos (por defecto `sqlite:///./pokedex.db`) |
 | `CORS_ORIGINS` | Orígenes permitidos para CORS, como lista JSON (por defecto `["http://localhost:5173"]`) |
 | `POKEAPI_TIMEOUT` | Opcional. Segundos de espera a la PokeAPI antes de responder 504 (por defecto 5) |
 | `LOG_LEVEL` | Opcional. Nivel de log: `DEBUG`, `INFO`, `WARNING` o `ERROR` (por defecto `INFO`) |
 | `LOG_FILE` | Opcional. Archivo de log además de la consola (por defecto `pokedex_api.log`; vacío = solo consola) |
+| `TRUST_PROXY` | Solo en Render: `true`. La IP del cliente para el rate limiting y los logs se toma de la cabecera que añade su proxy; si no, todos los usuarios comparten el mismo límite. En local y en el homelab, sin poner |
 
 ## Ejecución
 **En local** (con el `.env` configurado):
@@ -373,7 +374,8 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
 
 ## Mejoras Futuras
 - PostgreSQL en el despliegue de Render, para que los datos sobrevivan a cada despliegue (ahora es SQLite en un disco temporal).
-- Anular también el access token al cerrar sesión (lista de bloqueo por `jti`) o acortarlo a minutos ahora que existe el refresh token. Borrar periódicamente los refresh tokens caducados de la tabla.
-- Rate limiting por usuario y con almacenamiento compartido (Redis), en lugar de por IP y en memoria.
+- Anular también el access token al cerrar sesión (lista de bloqueo por `jti`). Ya dura solo 30 minutos y los refresh tokens caducados se borran en cada login.
+- Rate limiting también por cuenta (no solo por IP) y con almacenamiento compartido (Redis), en lugar de en memoria.
+- Verificación del email al registrarse: evitaría revelar qué emails tienen cuenta y que alguien se registre con un email ajeno (ver *Limitaciones conocidas* en `SECURITY.md`).
 - Migraciones de base de datos con Alembic.
 - Caché de las respuestas de la PokeAPI más allá de la búsqueda.
