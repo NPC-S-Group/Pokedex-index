@@ -203,7 +203,8 @@ async def test_formato_inesperado_da_502(cuerpo):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize(
-    "identificador", ["", "   ", "../ditto", "pika chu", "pikachu?x=1"]
+    # «pika chu» ya no está: los espacios se traducen a guion («Mr Mime» → «mr-mime»).
+    "identificador", ["", "   ", "../ditto", "pikachu?x=1", "pika/chu"]
 )
 async def test_identificador_no_valido_no_llama_fuera(identificador):
     manejador = responde(json=PIKACHU)

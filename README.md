@@ -100,12 +100,12 @@ Todos bajo `/api/v1` salvo `/health` y la v2 de ejemplo (`/api/v2`, ver *Version
 | POST | `/auth/refresh` | Cambia un refresh token por un par nuevo; el usado deja de valer | 10/min |
 | POST | `/auth/logout` | Anula el refresh token (responde siempre 204) | 10/min |
 | GET 🔒 | `/auth/me` | Usuario actual | 100/min |
-| GET 🔒 | `/pokemon/search?q=&type=&limit=&offset=` | Busca en la PokeAPI por nombre y/o tipo | 30/min |
+| GET 🔒 | `/pokemon/search?q=&type=&limit=&offset=&include_forms=` | Busca en la PokeAPI por nombre y/o tipo (sin formas especiales salvo `include_forms=true`) | 30/min |
 | GET 🔒 | `/pokemon/{id_or_name}` | Detalle: tipos, habilidades, sprites y estadísticas | 30/min |
 | GET 🔒 | `/pokemon/{id_or_name}/card` | Ficha del Pokémon en PDF | 30/min |
 | POST 🔒 | `/pokedex` | Añade un Pokémon (valida que exista; sin duplicados) | 30/min |
 | GET 🔒 | `/pokedex?captured=&favorite=&sort=&order=&limit=&offset=` | Lista tu Pokédex. **Obsoleta:** usa la v2 (ver *Versionado*) | 100/min |
-| GET 🔒 | `/pokedex/stats` | Total, capturados, favoritos, % completado, tipo más común y racha | 100/min |
+| GET 🔒 | `/pokedex/stats` | Total, capturados, favoritos, % completado (de tu Pokédex y de los 1025), tipos más comunes y racha | 100/min |
 | GET 🔒 | `/pokedex/export?format=csv\|pdf` | Exporta la Pokédex con los mismos filtros | 10/min |
 | GET · PATCH · DELETE 🔒 | `/pokedex/{entry_id}` | Detalle (**obsoleto:** usa la v2), actualización parcial y borrado de una entrada propia | 100/min |
 | GET · POST 🔒 | `/teams` | Lista tus equipos · crea uno (1 a 6 Pokémon de tu Pokédex) | 100/min |
@@ -168,6 +168,10 @@ El 500 queda para los errores de nuestro propio código. Así, quien use la API 
 | `GET /api/v1/pokemon/{id_or_name}` | Detalle: tipos, altura (m), peso (kg), habilidades (y si son ocultas), sprites y las seis estadísticas base |
 | `GET /api/v1/pokemon/{id_or_name}/card` | Ficha en PDF (A5) con imagen, tipos, datos y barras de estadísticas |
 
+**Nombres como los escribe una persona:** antes de llamar a la PokeAPI o de buscar, el nombre se traduce a su formato (`nombre_a_slug`): sin distinguir mayúsculas ni espacios en los extremos, y con los signos convertidos. `PIKACHU` → `pikachu`, `Mr. Mime` → `mr-mime`, `Farfetch'd` → `farfetchd`, `Nidoran♀` → `nidoran-f`, `Flabébé` → `flabebe`, `Type: Null` → `type-null`. Lo que no es un nombre (`../ditto`, `<script>`) se sigue rechazando con 422 sin llamar fuera.
+
+**Formas especiales:** la PokeAPI también lista formas como `pikachu-rock-star` (id 10080), que no se pueden añadir a la Pokédex (solo ids del 1 al 1025). Por eso la búsqueda las deja fuera por defecto. Con `include_forms=true` se incluyen; su detalle y su ficha siguen funcionando.
+
 **¿Cómo se busca si la PokeAPI no tiene búsqueda?** Se pide una vez la lista de todos los nombres (una sola llamada, ~1300 Pokémon) y se filtra en nuestro servidor. La lista se guarda en memoria 24 horas, porque casi nunca cambia: así buscar no gasta llamadas a la PokeAPI. Con `type` se usa `/type/{tipo}`, que ya trae solo los de ese tipo (también en caché).
 
 **Ficha en PDF:** se genera con `fpdf2`, en memoria, sin guardar archivos. La imagen se descarga solo del repositorio oficial de sprites (`raw.githubusercontent.com`, por HTTPS y como mucho 2 MB): así la API no puede usarse para descargar cosas de otros sitios. Si la imagen falla, la ficha sale igual con el hueco «Sin imagen».
@@ -177,12 +181,17 @@ El 500 queda para los errores de nuestro propio código. Así, quien use la API 
 
 ```json
 {
-  "total_pokemon": 4, "captured": 2, "favorites": 0, "completion_percentage": 50.0,
-  "most_common_type": "normal", "capture_streak_days": 2
+  "total_pokemon": 4, "captured": 2, "favorites": 0,
+  "completion_percentage": 50.0, "national_dex_percentage": 0.2,
+  "most_common_type": "normal", "most_common_types": ["normal"], "capture_streak_days": 2
 }
 ```
 
+- **`completion_percentage`:** de los Pokémon que tienes en **tu** Pokédex, qué parte has capturado (3 Pokémon con 1 capturado → 33,3 %).
+- **`national_dex_percentage`:** qué parte de los **1025** Pokémon de la Pokédex nacional has capturado (1 capturado → 0,1 %). Es la respuesta a «cuánto me falta para completarla».
 - **`most_common_type`:** el tipo que más se repite en toda tu Pokédex (capturados o no). Un Pokémon de dos tipos cuenta para los dos. Si hay empate, gana el primero por orden alfabético, para que el resultado no cambie según el orden de las filas. Con la Pokédex vacía, `null`.
+- **`most_common_types`:** todos los tipos empatados en el primer puesto, para que el desempate no parezca aleatorio. Con charizard (fuego/volador) y pikachu (eléctrico): `["electric", "fire", "flying"]`.
+- Los dos campos nuevos (`national_dex_percentage` y `most_common_types`) se añadieron sin quitar ni cambiar los anteriores, así que la v1 no se rompe.
 - **`capture_streak_days`:** días seguidos, hasta hoy, en los que capturaste al menos un Pokémon. Si hoy aún no has capturado nada, la racha sigue viva desde ayer y solo se rompe cuando pasa un día entero sin capturas. Los días se cuentan en UTC.
 - **Tipos guardados:** al añadir un Pokémon se guardan sus tipos (`pokemon_types`) junto al nombre y la imagen. Así `/stats` no llama a la PokeAPI. Las bases de datos creadas antes reciben la columna nueva al arrancar (`app/database.py`), sin borrar nada; sus entradas antiguas no tienen tipos y no cuentan para el tipo más común.
 
@@ -216,13 +225,15 @@ Registro con `POST /auth/register`, login con `POST /auth/login` (formulario OAu
 
 | Paso | Qué hace la API |
 |---|---|
-| Registro | Valida usuario (3 a 50 caracteres), email y contraseña (mínimo 8, con una mayúscula y un número). Guarda solo el hash `bcrypt` y responde `201` con el usuario, nunca con la contraseña |
+| Registro | Valida usuario (3 a 50 caracteres: letras, números y `_ . -`), email y contraseña (mínimo 8, con una mayúscula y un número). Guarda solo el hash `bcrypt` y responde `201` con el usuario, nunca con la contraseña |
 | Login | Comprueba la contraseña con `bcrypt` y devuelve `{"access_token", "refresh_token", "token_type": "bearer"}` |
 | Renovar (`/auth/refresh`) | Recibe `{"refresh_token"}` y devuelve un par nuevo. El refresh token usado queda anulado |
 | Cerrar sesión (`/auth/logout`) | Recibe `{"refresh_token"}` y lo anula |
+
+**Mayúsculas:** los correos no distinguen mayúsculas, así que el email se guarda en minúsculas y sin espacios (`  Ash@X.com ` → `ash@x.com`). El usuario se guarda tal y como se escribió (`Ash`), pero se compara sin mayúsculas: `ash` y `ASH` no se pueden registrar si ya existe `Ash`, y los tres entran en la misma cuenta. Lo garantiza también un índice único sobre `lower(username)` en la base de datos.
 | Cada petición protegida | Lee el token, comprueba la firma y la caducidad y busca al usuario por el `user_id` del token |
 
-**¿Qué lleva el token?** `sub` (nombre de usuario), `user_id`, `type`, `iat` y `exp`. El access token (`type: "access"`) caduca a las 24 horas (`access_token_expire_minutes`). Con el token se busca al usuario por su `user_id` (la clave primaria), no por el nombre.
+**¿Qué lleva el token?** `sub` (nombre de usuario), `user_id`, `type`, `iat` y `exp`. El access token (`type: "access"`) caduca a los **30 minutos** (`access_token_expire_minutes`); para seguir conectado se usa el refresh token (7 días). Con el token se busca al usuario por su `user_id` (la clave primaria), no por el nombre.
 
 **¿Para qué sirve el refresh token?** Para no tener que escribir la contraseña cada día. El access token va en cada petición, así que, si alguien lo roba, puede usarlo; por eso dura poco (24 h). El refresh token (`type: "refresh"`, 7 días, `refresh_token_expire_days`) solo se envía a `/auth/refresh` para pedir un par nuevo. Así, una sesión dura hasta 7 días desde el último uso sin volver a dar la contraseña.
 
@@ -235,7 +246,7 @@ Registro con `POST /auth/register`, login con `POST /auth/login` (formulario OAu
 | **Anulación atómica** | Se anula con un `UPDATE … WHERE revoked_at IS NULL`: si llegan dos renovaciones con el mismo token a la vez, solo una gana y la otra cuenta como reutilización |
 | **Logout siempre 204** | Responde igual si el token es válido, falso o ya estaba anulado: no sirve para averiguar qué tokens existen |
 
-**¿Y el access token tras el logout?** Sigue valiendo hasta que caduca (máximo 24 h), porque se comprueba sin consultar la base de datos. El cliente debe borrarlo al cerrar sesión. Anularlo al momento exigiría consultar una lista de bloqueo en cada petición (ver *Mejoras futuras*). Los tokens emitidos antes de esta mejora, que no llevan `type`, se tratan como access tokens hasta que caducan.
+**¿Y el access token tras el logout?** Sigue valiendo hasta que caduca (máximo 30 minutos; antes eran 24 h y en una demo parecía un fallo), porque se comprueba sin consultar la base de datos. El cliente debe borrarlo al cerrar sesión. Anularlo al momento exigiría consultar una lista de bloqueo en cada petición (ver *Mejoras futuras*). Los tokens emitidos antes de esta mejora, que no llevan `type`, se tratan como access tokens hasta que caducan.
 
 **¿Qué responde un login fallido?** Siempre lo mismo, falle lo que falle: `401` con `{"detail": "Usuario o contraseña incorrectos"}` y la cabecera `WWW-Authenticate: Bearer`. Ni el código, ni el mensaje, ni las cabeceras, ni el tiempo de respuesta dicen si el error está en el usuario, en la contraseña o en que la cuenta está desactivada (ver *Decisiones de Seguridad*).
 
@@ -259,6 +270,8 @@ Cada entrada guarda el id, el nombre, la imagen y los tipos del Pokémon, más l
 | `PATCH {"is_captured": true}` | Si no tenía fecha, ahora; si ya la tenía, se conserva |
 | `PATCH {"is_captured": true, "capture_date": "..."}` | La fecha enviada (por ejemplo, para registrar una captura antigua) |
 | `PATCH {"is_captured": false}` | `capture_date` = `null` |
+
+**¿Y una fecha futura?** Se rechaza con 422: no se puede capturar un Pokémon en 2030. Hay 5 minutos de margen por si el reloj del cliente va algo adelantado.
 
 **¿Y si la fecha llega sin zona horaria?** Una fecha como `"2026-01-15T10:00:00"` se interpreta como UTC. Antes, la base de datos la rechazaba y la API respondía `500`: lo detectaron los tests y se corrigió en `PokedexEntryUpdate`.
 
@@ -336,7 +349,7 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
 
 ## Otras decisiones de diseño
 - **404 y no 403 con lo ajeno:** si una entrada o un equipo es de otro usuario, respondemos como si no existiera, para no confirmar qué ids hay.
-- **Equipos:** se guardan las entradas de la Pokédex, no los ids sueltos de la PokeAPI, así que solo se pueden usar Pokémon que tienes. La posición sigue el orden enviado y `PUT` reemplaza el equipo entero. Borrar un Pokémon de la Pokédex lo saca de sus equipos.
+- **Equipos:** se guardan las entradas de la Pokédex, no los ids sueltos de la PokeAPI, así que solo se pueden usar Pokémon que tienes. La posición sigue el orden enviado y `PUT` reemplaza el equipo entero. Un equipo tiene **siempre de 1 a 6 Pokémon**: borrar de la Pokédex un Pokémon lo saca de sus equipos (y el resto se renumera), salvo que sea el único de alguno. En ese caso responde **409** con el nombre del equipo, para que no quede vacío. El nombre del equipo y el mote no pueden quedarse en blanco ni llevar tabuladores o saltos de línea.
 - **PokeAPI aislada en un servicio** (`app/services/pokeapi_service.py`) que se inyecta como dependencia: los routers no saben de `httpx` y los tests la sustituyen por una falsa, sin salir a internet.
 - **Un solo generador de PDF** (`fpdf2`, Python puro): la ficha del Pokémon se reutiliza en el PDF del equipo.
 - **`bcrypt` directo en lugar de `passlib`:** `passlib` lleva años sin mantenerse y falla con `bcrypt >= 4.1`.
@@ -344,7 +357,7 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
 
 ## Decisiones de Seguridad
 - **Contraseñas** con `bcrypt` (sal por usuario). Nunca se devuelven ni se registran en los logs.
-- **JWT** firmados con HS256 y `SECRET_KEY`, con caducidad de 24 horas. Sin `SECRET_KEY` la aplicación no arranca: no hay clave por defecto.
+- **JWT** firmados con HS256 y `SECRET_KEY`: el de acceso caduca a los 30 minutos y el refresh token a los 7 días. Sin `SECRET_KEY` la aplicación no arranca: no hay clave por defecto.
 - **Refresh tokens** de 7 días, de un solo uso (rotación), que se pueden anular (logout) y que, si se reutilizan, anulan todas las sesiones de la cuenta. No sirven para entrar en los endpoints protegidos.
 - **Login sin pistas:** el mismo código (`401`), el mismo mensaje («Usuario o contraseña incorrectos») y **el mismo tiempo de respuesta** si no existe el usuario, si la contraseña es incorrecta o si la cuenta está desactivada. El tiempo también cuenta: antes, «no existe» respondía en ~9 ms y «contraseña mala» en ~250 ms, porque solo en el segundo caso se ejecutaba `bcrypt`, y con un cronómetro se podía averiguar qué usuarios existen. Ahora `bcrypt` se ejecuta siempre (con un hash falso si el usuario no existe) y los dos casos tardan lo mismo.
 - **Tokens de cuentas borradas o desactivadas:** cada petición comprueba que el usuario del token sigue existiendo y está activo; si no, `401`.

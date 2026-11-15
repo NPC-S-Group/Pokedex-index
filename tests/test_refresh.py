@@ -41,11 +41,12 @@ def test_login_devuelve_access_y_refresh(client, test_user):
     assert decode_access_token(par["refresh_token"])["type"] == "refresh"
 
 
-def test_access_dura_24_horas_y_refresh_7_dias(client, test_user):
+def test_access_dura_30_minutos_y_refresh_7_dias(client, test_user):
     par = _login(client, test_user)
     access = decode_access_token(par["access_token"])
     refresh = decode_access_token(par["refresh_token"])
-    assert access["exp"] - access["iat"] == 24 * 60 * 60
+    # Corto: tras el logout, el access token deja de valer en 30 min como mucho.
+    assert access["exp"] - access["iat"] == 30 * 60
     assert refresh["exp"] - refresh["iat"] == 7 * 24 * 60 * 60
 
 

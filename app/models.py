@@ -1,14 +1,34 @@
 """Modelos: Base (campos comunes) → Table (la tabla) → Create / Read / Update (los contratos)."""
 
-from datetime import UTC, datetime
+import re
+from datetime import UTC, datetime, timedelta
 
 from pydantic import EmailStr, field_validator
-from sqlalchemy import JSON, Column, UniqueConstraint
+from sqlalchemy import JSON, Column, Index, UniqueConstraint, func
 from sqlmodel import Field, Relationship, SQLModel
 
 
 def ahora() -> datetime:
     return datetime.now(UTC)
+
+
+# Pokémon de la Pokédex nacional (sin formas especiales, que tienen ids > 10000).
+TOTAL_POKEMON = 1025
+
+# Usuarios: letras, números y _ . - (nada de espacios, tabuladores ni saltos de línea).
+_USUARIO_VALIDO = re.compile(r"^[A-Za-z0-9_.-]+$")
+# Caracteres de control (tabuladores, saltos de línea, etc.).
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def texto_limpio(valor: str | None, campo: str) -> str | None:
+    """Quita los espacios de los extremos y rechaza caracteres de control."""
+    if valor is None:
+        return None
+    valor = valor.strip()
+    if _CONTROL.search(valor):
+        raise ValueError(f"{campo} no puede tener tabuladores ni saltos de línea")
+    return valor
 
 
 # ───────────────────────────── Usuarios ─────────────────────────────
@@ -20,6 +40,12 @@ class UserBase(SQLModel):
 
 
 class User(UserBase, table=True):
+    # «Ash» y «ash» son el mismo usuario: único sin distinguir mayúsculas. Se guarda
+    # tal y como lo escribió (para mostrarlo así), pero se compara en minúsculas.
+    __table_args__ = (
+        Index("ix_user_username_lower", func.lower(Column("username")), unique=True),
+    )
+
     id: int | None = Field(default=None, primary_key=True)
     hashed_password: str
     is_active: bool = True
@@ -31,6 +57,32 @@ class User(UserBase, table=True):
 
 class UserCreate(UserBase):
     password: str = Field(min_length=8)
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def usuario_limpio(cls, valor):
+        # Antes de validar la longitud: «   ab   » no cuenta como 8 caracteres.
+        return valor.strip() if isinstance(valor, str) else valor
+
+    @field_validator("username")
+    @classmethod
+    def usuario_valido(cls, valor: str) -> str:
+        if not _USUARIO_VALIDO.fullmatch(valor):
+            raise ValueError(
+                "el usuario solo puede tener letras, números y los signos _ . -"
+            )
+        return valor
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def email_limpio(cls, valor):
+        return valor.strip() if isinstance(valor, str) else valor
+
+    @field_validator("email")
+    @classmethod
+    def email_en_minusculas(cls, valor: str) -> str:
+        # Los correos no distinguen mayúsculas: ASH@x.com y ash@x.com son el mismo.
+        return valor.lower()
 
     @field_validator("password")
     @classmethod
@@ -102,7 +154,12 @@ class PokedexEntry(PokedexEntryBase, table=True):
 
 
 class PokedexEntryCreate(PokedexEntryBase):
-    pokemon_id: int = Field(ge=1, le=1025)
+    pokemon_id: int = Field(ge=1, le=TOTAL_POKEMON)
+
+    @field_validator("nickname")
+    @classmethod
+    def mote_limpio(cls, valor: str | None) -> str | None:
+        return texto_limpio(valor, "el mote") or None
 
 
 class PokedexEntryRead(PokedexEntryBase):
@@ -120,8 +177,12 @@ class PokedexStats(SQLModel):
     total_pokemon: int
     captured: int
     favorites: int
-    completion_percentage: float  # % de tu Pokédex que está capturado
+    completion_percentage: float  # % de TU Pokédex que está capturado
+    # % de los 1025 Pokémon de la Pokédex nacional que has capturado.
+    national_dex_percentage: float
+    # Si hay empate, el primero en orden alfabético (ver most_common_types).
     most_common_type: str | None  # None si la Pokédex está vacía
+    most_common_types: list[str]  # todos los empatados en el primer puesto
     capture_streak_days: int  # días seguidos con alguna captura, hasta hoy o ayer
 
 
@@ -139,8 +200,16 @@ class PokedexEntryUpdate(SQLModel):
         # Una fecha sin zona horaria («2026-01-15T10:00:00») se toma como UTC.
         # Sin esto la base de datos la rechaza y la API devolvía un 500.
         if valor is not None and valor.tzinfo is None:
-            return valor.replace(tzinfo=UTC)
+            valor = valor.replace(tzinfo=UTC)
+        # 5 minutos de margen por si el reloj del cliente va un poco adelantado.
+        if valor is not None and valor > ahora() + timedelta(minutes=5):
+            raise ValueError("la fecha de captura no puede ser futura")
         return valor
+
+    @field_validator("nickname")
+    @classmethod
+    def mote_limpio(cls, valor: str | None) -> str | None:
+        return texto_limpio(valor, "el mote") or None
 
 
 # ───────────────────────────── Equipos ─────────────────────────────
@@ -176,6 +245,21 @@ class TeamBase(SQLModel):
 class TeamCreate(TeamBase):
     # Ids de Pokémon (los de la PokeAPI) que ya están en la Pokédex del usuario.
     pokemon_ids: list[int] = Field(min_length=1, max_length=6)
+
+    # Solo en lo que entra (TeamCreate), no en TeamRead: un equipo ya guardado con un
+    # nombre raro se sigue pudiendo leer.
+    @field_validator("name", mode="before")
+    @classmethod
+    def nombre_limpio(cls, valor):
+        # Antes de validar la longitud: «   » se queda en «» y da 422.
+        return texto_limpio(valor, "el nombre") if isinstance(valor, str) else valor
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def descripcion_limpia(cls, valor):
+        if isinstance(valor, str):
+            return valor.strip() or None
+        return valor
 
     @field_validator("pokemon_ids")
     @classmethod

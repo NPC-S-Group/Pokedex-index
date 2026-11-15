@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import or_, select, update
+from sqlmodel import func, or_, select, update
 
 from app.auth import (
     create_access_token,
@@ -46,7 +46,10 @@ _HASH_FALSO = hash_password("usuario-que-no-existe-" + "x" * 16)
 def registrar(request: Request, datos: UserCreate, session: SessionDep):
     repetido = session.exec(
         select(User).where(
-            or_(User.username == datos.username, User.email == datos.email)
+            or_(
+                func.lower(User.username) == datos.username.lower(),
+                func.lower(User.email) == datos.email,
+            )
         )
     ).first()
     if repetido:
@@ -80,7 +83,7 @@ def registrar(request: Request, datos: UserCreate, session: SessionDep):
 
 
 def _emitir_par(session, usuario: User) -> TokenPair:
-    """Access token (24 h) + refresh token (7 días), guardando el refresh en la BD."""
+    """Access token (30 min) + refresh token (7 días), guardando el refresh en la BD."""
     refresh, jti, caduca = create_refresh_token(usuario.username, usuario.id)
     session.add(RefreshToken(jti=jti, user_id=usuario.id, expires_at=caduca))
     session.commit()
@@ -119,7 +122,12 @@ def login(
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
     session: SessionDep,
 ):
-    usuario = session.exec(select(User).where(User.username == form.username)).first()
+    # Sin distinguir mayúsculas: «Ash», «ash» y «ASH» entran en la misma cuenta.
+    usuario = session.exec(
+        select(User).where(
+            func.lower(User.username) == form.username.strip().lower()
+        )
+    ).first()
     # bcrypt se ejecuta SIEMPRE, exista o no el usuario: mismo mensaje y mismo tiempo.
     hash_guardado = usuario.hashed_password if usuario else _HASH_FALSO
     clave_correcta = verify_password(form.password, hash_guardado)
@@ -178,7 +186,7 @@ def refrescar(request: Request, datos: RefreshRequest, session: SessionDep):
 def logout(request: Request, datos: RefreshRequest, session: SessionDep):
     """Anula el refresh token. Responde 204 siempre, sea válido o no: así no sirve
     para averiguar qué tokens existen. El access token sigue valiendo hasta que
-    caduca (máximo 24 h): el cliente debe borrarlo."""
+    caduca (máximo 30 min): el cliente debe borrarlo."""
     payload = _payload_refresh(datos.refresh_token)
     if payload is not None and _anular(session, RefreshToken.jti == payload["jti"]):
         logger.info(

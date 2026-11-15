@@ -23,6 +23,7 @@ El CI exige **cobertura ≥ 80 %**. El enunciado pide **mínimo 15 tests**.
 | `test_pokeapi_service.py` | Servicio con mock: OK, errores, timeouts y logging | 31 | #5 Henar |
 | `test_pokemon.py` | Búsqueda (nombre, tipo, paginación, caché), detalle y ficha PDF, con la PokeAPI simulada | 37 | #8 Henar |
 | `test_logging.py` | Logging de peticiones, auth, 422 y 429; que no se filtren contraseñas ni tokens | 22 | #10 Henar |
+| `test_mejoras.py` | Mejoras de la revisión del 15 nov: equipos nunca vacíos, nombres y motes limpios, sin fechas futuras, nombres de Pokémon con signos, búsqueda sin formas especiales y estadísticas con empates | 41 | Jorge |
 
 **Avance:** el número de tests y la cobertura de cada cambio se ven en el CI (pestaña *Actions* de cada PR) y en las notas de cada release. Así no hay que editar esta línea en cada PR, que provocaba conflictos.
 

@@ -371,7 +371,9 @@ def test_stats_vacia(client, auth_headers):
         "captured": 0,
         "favorites": 0,
         "completion_percentage": 0.0,
+        "national_dex_percentage": 0.0,
         "most_common_type": None,
+        "most_common_types": [],
         "capture_streak_days": 0,
     }
 
@@ -388,9 +390,11 @@ def test_stats_cuenta_solo_lo_mio(
         "captured": 2,
         "favorites": 1,
         "completion_percentage": 66.7,
+        "national_dex_percentage": 0.2,  # 2 de 1025
         # 1 bulbasaur (grass, poison), 4 charmander (fire), 7 squirtle (water):
         # empate a 1, gana el primero por orden alfabético.
         "most_common_type": "fire",
+        "most_common_types": ["fire", "grass", "poison", "water"],
         # add_to_pokedex no pone capture_date: sin fechas no hay racha.
         "capture_streak_days": 0,
     }
