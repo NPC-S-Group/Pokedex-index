@@ -29,6 +29,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.auth import decode_access_token
+from app.limits import ip_cliente
 
 FORMATO = "%(asctime)s %(levelname)s %(name)s · %(message)s"
 
@@ -80,7 +81,8 @@ def _usuario(request: Request) -> str:
 
 
 def _ip(request: Request) -> str:
-    return request.client.host if request.client else "-"
+    # La misma IP que usa el rate limiting (la real del cliente detrás de Render).
+    return ip_cliente(request) or "-"
 
 
 def _nivel(codigo: int) -> int:

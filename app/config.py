@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     # Archivo de log además de la consola. Vacío ("") = solo consola.
     log_file: str | None = "pokedex_api.log"
+    # True solo detrás de un proxy de confianza (Render): la IP del cliente se toma de
+    # la última entrada de X-Forwarded-For, que es la que añade ese proxy.
+    trust_proxy: bool = False
     cors_origins: list[str] = ["http://localhost:5173"]
 
 
