@@ -43,7 +43,41 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Pokédex API",
     version="1.0.3",
-    description="API REST del Pokédex personal · Práctica 1",
+    description=(
+        "API REST del Pokédex personal · Práctica 1 de Sistemas de Información (UFV).\n\n"
+        "Busca Pokémon en la PokeAPI, guarda los tuyos en tu Pokédex y monta equipos "
+        "de batalla. **Para probar los endpoints con candado:** regístrate en "
+        "`POST /api/v1/auth/register` y pulsa **Authorize** con tu usuario y "
+        "contraseña."
+    ),
+    openapi_tags=[
+        {
+            "name": "auth",
+            "description": "Registro, login con JWT, renovación de la sesión con el "
+            "refresh token, logout y tu usuario.",
+        },
+        {
+            "name": "pokemon",
+            "description": "Consultas a la PokeAPI: búsqueda por nombre y tipo, "
+            "detalle de un Pokémon y su ficha en PDF.",
+        },
+        {
+            "name": "pokedex",
+            "description": "Tu Pokédex personal: añadir, ver, editar y borrar "
+            "Pokémon, estadísticas y exportación a CSV o PDF. Solo ves lo tuyo.",
+        },
+        {
+            "name": "teams",
+            "description": "Equipos de batalla de 1 a 6 Pokémon de tu Pokédex, y "
+            "su exportación en PDF con las estadísticas combinadas.",
+        },
+        {
+            "name": "pokedex v2",
+            "description": "Ejemplo de versión 2 de la Pokédex: misma información con "
+            "otro formato de respuesta. Ver «Versionado» en el README.",
+        },
+        {"name": "sistema", "description": "Estado de la API."},
+    ],
     lifespan=lifespan,
 )
 
@@ -78,7 +112,7 @@ for modulo in (auth, pokemon, pokedex, teams):
 app.include_router(pokedex_v2.router, prefix="/api/v2")
 
 
-@app.get("/health", tags=["sistema"])
+@app.get("/health", summary="Comprobar que la API está viva", tags=["sistema"])
 def health():  # sin límite: la usan los monitores
     respuesta = {"status": "ok"}
     # Render pone el commit desplegado en RENDER_GIT_COMMIT. El CI lo usa para saber

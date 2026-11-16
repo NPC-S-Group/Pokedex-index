@@ -22,7 +22,11 @@ from app.routers.pokedex import _consulta_filtrada, _entrada_propia
 router = APIRouter(prefix="/pokedex", tags=["pokedex v2"])
 
 
-@router.get("", response_model=PokedexPageV2)
+@router.get(
+    "",
+    summary="Ver mi Pokédex (v2: paginación con total y has_more)",
+    response_model=PokedexPageV2,
+)
 @limiter.limit(LIMITE_AUTENTICADO)
 def listar(
     request: Request,
@@ -50,7 +54,11 @@ def listar(
     )
 
 
-@router.get("/{entry_id}", response_model=PokedexEntryV2)
+@router.get(
+    "/{entry_id}",
+    summary="Ver una entrada de mi Pokédex (v2)",
+    response_model=PokedexEntryV2,
+)
 @limiter.limit(LIMITE_AUTENTICADO)
 def detalle(request: Request, entry_id: int, usuario: CurrentUser, session: SessionDep):
     return PokedexEntryV2.desde(_entrada_propia(session, entry_id, usuario))
