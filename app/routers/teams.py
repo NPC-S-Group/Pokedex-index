@@ -20,7 +20,9 @@ from app.services.equipo_pdf import generar_pdf_equipo
 router = APIRouter(prefix="/teams", tags=["teams"])
 
 
-def _entradas_de_la_pokedex(session, usuario, pokemon_ids: list[int]) -> list[PokedexEntry]:
+def _entradas_de_la_pokedex(
+    session, usuario, pokemon_ids: list[int]
+) -> list[PokedexEntry]:
     """Devuelve las entradas en el mismo orden que pokemon_ids, o 400 si falta alguna."""
     entradas = session.exec(
         select(PokedexEntry).where(
@@ -81,9 +83,16 @@ def _equipo_propio(session, team_id: int, usuario) -> Team:
     return team
 
 
-@router.post("", response_model=TeamRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    summary="Crear un equipo de batalla",
+    response_model=TeamRead,
+    status_code=status.HTTP_201_CREATED,
+)
 @limiter.limit(LIMITE_AUTENTICADO)
-def crear(request: Request, datos: TeamCreate, usuario: CurrentUser, session: SessionDep):
+def crear(
+    request: Request, datos: TeamCreate, usuario: CurrentUser, session: SessionDep
+):
     entradas = _entradas_de_la_pokedex(session, usuario, datos.pokemon_ids)
     team = Team(trainer_id=usuario.id, name=datos.name, description=datos.description)
     _poner_miembros(team, entradas)
@@ -93,7 +102,7 @@ def crear(request: Request, datos: TeamCreate, usuario: CurrentUser, session: Se
     return _a_respuesta(session, team)
 
 
-@router.get("", response_model=list[TeamRead])
+@router.get("", summary="Ver mis equipos", response_model=list[TeamRead])
 @limiter.limit(LIMITE_AUTENTICADO)
 def listar(request: Request, usuario: CurrentUser, session: SessionDep):
     equipos = session.exec(
@@ -102,15 +111,25 @@ def listar(request: Request, usuario: CurrentUser, session: SessionDep):
     return [_a_respuesta(session, t) for t in equipos]
 
 
-@router.get("/{team_id}", response_model=TeamRead)
+@router.get("/{team_id}", summary="Ver un equipo", response_model=TeamRead)
 @limiter.limit(LIMITE_AUTENTICADO)
 def detalle(request: Request, team_id: int, usuario: CurrentUser, session: SessionDep):
     return _a_respuesta(session, _equipo_propio(session, team_id, usuario))
 
 
-@router.put("/{team_id}", response_model=TeamRead)
+@router.put(
+    "/{team_id}",
+    summary="Reemplazar un equipo (nombre, descripción y miembros)",
+    response_model=TeamRead,
+)
 @limiter.limit(LIMITE_AUTENTICADO)
-def actualizar(request: Request, team_id: int, datos: TeamCreate, usuario: CurrentUser, session: SessionDep):
+def actualizar(
+    request: Request,
+    team_id: int,
+    datos: TeamCreate,
+    usuario: CurrentUser,
+    session: SessionDep,
+):
     # PUT reemplaza el equipo entero: nombre, descripción y miembros.
     team = _equipo_propio(session, team_id, usuario)
     entradas = _entradas_de_la_pokedex(session, usuario, datos.pokemon_ids)
@@ -123,7 +142,9 @@ def actualizar(request: Request, team_id: int, datos: TeamCreate, usuario: Curre
     return _a_respuesta(session, team)
 
 
-@router.delete("/{team_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{team_id}", summary="Borrar un equipo", status_code=status.HTTP_204_NO_CONTENT
+)
 @limiter.limit(LIMITE_AUTENTICADO)
 def borrar(request: Request, team_id: int, usuario: CurrentUser, session: SessionDep):
     team = _equipo_propio(session, team_id, usuario)
@@ -134,6 +155,7 @@ def borrar(request: Request, team_id: int, usuario: CurrentUser, session: Sessio
 
 @router.get(
     "/{team_id}/export",
+    summary="Descargar un equipo en PDF",
     response_class=Response,
     responses={
         200: {"content": {"application/pdf": {}}, "description": "Equipo en PDF"}

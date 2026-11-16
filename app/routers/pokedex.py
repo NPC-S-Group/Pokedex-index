@@ -39,7 +39,12 @@ ORDENABLE = {
 }
 
 
-@router.post("", response_model=PokedexEntryRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    summary="Añadir un Pokémon a mi Pokédex",
+    response_model=PokedexEntryRead,
+    status_code=status.HTTP_201_CREATED,
+)
 @limiter.limit(LIMITE_POKEAPI)  # consulta la PokeAPI para validar el id
 async def anadir(
     request: Request,
@@ -80,6 +85,7 @@ async def anadir(
 # (cabeceras Deprecation, Sunset y Link, y tachados en Swagger). Ver app/versionado.py.
 @router.get(
     "",
+    summary="Ver mi Pokédex (filtros, orden y paginación)",
     response_model=list[PokedexEntryRead],
     deprecated=True,
     dependencies=[Depends(obsoleta_en_v1)],
@@ -117,6 +123,7 @@ def _consulta_filtrada(usuario, captured, favorite, sort, order):
 # /export va ANTES que /{entry_id}, por lo mismo que /stats.
 @router.get(
     "/export",
+    summary="Exportar mi Pokédex en CSV o PDF",
     response_class=Response,
     responses={
         200: {
@@ -167,7 +174,9 @@ def _contar(session, *condiciones) -> int:
 
 
 # /stats va ANTES que /{entry_id}: si no, FastAPI intentaría leer "stats" como un id.
-@router.get("/stats", response_model=PokedexStats)
+@router.get(
+    "/stats", summary="Ver las estadísticas de mi Pokédex", response_model=PokedexStats
+)
 @limiter.limit(LIMITE_AUTENTICADO)
 def estadisticas(request: Request, usuario: CurrentUser, session: SessionDep):
     mias = PokedexEntry.owner_id == usuario.id
@@ -204,6 +213,7 @@ def _entrada_propia(session, entry_id: int, usuario) -> PokedexEntry:
 
 @router.get(
     "/{entry_id}",
+    summary="Ver una entrada de mi Pokédex",
     response_model=PokedexEntryRead,
     deprecated=True,
     dependencies=[Depends(obsoleta_en_v1)],
@@ -213,7 +223,11 @@ def detalle(request: Request, entry_id: int, usuario: CurrentUser, session: Sess
     return _entrada_propia(session, entry_id, usuario)
 
 
-@router.patch("/{entry_id}", response_model=PokedexEntryRead)
+@router.patch(
+    "/{entry_id}",
+    summary="Editar una entrada de mi Pokédex",
+    response_model=PokedexEntryRead,
+)
 @limiter.limit(LIMITE_AUTENTICADO)
 def actualizar(
     request: Request,
@@ -237,7 +251,11 @@ def actualizar(
     return entrada
 
 
-@router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{entry_id}",
+    summary="Borrar una entrada de mi Pokédex",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 @limiter.limit(LIMITE_AUTENTICADO)
 def borrar(request: Request, entry_id: int, usuario: CurrentUser, session: SessionDep):
     entrada = _entrada_propia(session, entry_id, usuario)
