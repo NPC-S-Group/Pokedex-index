@@ -38,7 +38,7 @@ Copia `.env.example` como `.env` y rellena los valores:
 | `POKEAPI_TIMEOUT` | Opcional. Segundos de espera a la PokeAPI antes de responder 504 (por defecto 5) |
 | `LOG_LEVEL` | Opcional. Nivel de log: `DEBUG`, `INFO`, `WARNING` o `ERROR` (por defecto `INFO`) |
 | `LOG_FILE` | Opcional. Archivo de log además de la consola (por defecto `pokedex_api.log`; vacío = solo consola) |
-| `TRUSTED_PROXY_HOPS` | Opcional. Cuántos proxies hay delante de la API (por defecto `0`, en local y en el homelab). En Render, `1`: así el límite de peticiones y los logs usan la IP real de cada usuario y no la del proxy. `TRUST_PROXY=true` es un atajo que equivale a `1` |
+| `TRUSTED_PROXY_HOPS` | Opcional. Cuántos proxies hay delante de la API (por defecto `0`, en local y en el homelab). En Render, **`3`** (Cloudflare y dos proxies de Render, comprobado en sus logs): así el límite de peticiones y los logs usan la IP real de cada usuario y no la de un proxy. `TRUST_PROXY=true` es un atajo que equivale a `1`, que en Render **no basta** |
 
 ## Ejecución
 **En local** (con el `.env` configurado):
@@ -142,7 +142,15 @@ Cada endpoint tiene su límite (`app/limits.py`), contado por IP con `slowapi`:
 
 **¿Por qué además un límite por cuenta en el login?** El límite por IP se salta cambiando de IP (una VPN, muchos ordenadores). Tras 5 contraseñas incorrectas en 15 minutos, esa cuenta deja de aceptar logins durante un rato (`429` con `Retry-After: 900`), venga de donde venga. Un login correcto pone el contador a cero, y otras cuentas no se ven afectadas.
 
-**¿Qué IP se usa detrás de Render?** En Render las peticiones llegan a través de su proxy, así que la conexión viene siempre de la misma IP interna: todos los usuarios compartían el contador, y 10 logins fallidos de una persona bloqueaban el login de todos. Con `TRUSTED_PROXY_HOPS=1`, la IP se saca de la cabecera `X-Forwarded-For` empezando **por la derecha** (la entrada que añade Render), porque la parte izquierda la escribe el cliente y podría inventársela para saltarse el límite.
+**¿Qué IP se usa detrás de Render?** En Render las peticiones llegan a través de su proxy, así que la conexión viene siempre de la misma IP interna: todos los usuarios compartían el contador, y 10 logins fallidos de una persona bloqueaban el login de todos. Con `TRUSTED_PROXY_HOPS`, la IP se saca de la cabecera `X-Forwarded-For` contando **desde la derecha** (las entradas que añaden los proxies), porque la parte izquierda la escribe el cliente y podría inventársela para saltarse el límite. En Render hacen falta **3** saltos, y lo comprobamos el 16-11 en sus logs con peticiones marcadas:
+
+| Valor | IP que salía en los logs |
+|---|---|
+| `1` (o `TRUST_PROXY=true`) | Una IP interna de Render (`10.x.x.x`), la misma para todos |
+| `2` | Una IP de Cloudflare (`162.158.x.x`), compartida por muchos usuarios |
+| **`3`** | **La IP pública real del cliente** |
+
+Con `3`, una petición con un `X-Forwarded-For` inventado (una IP o dos) sigue registrando la IP real: no se puede falsear.
 
 > Nota técnica: no usamos `default_limits` de slowapi porque, con la versión de FastAPI del proyecto, no llega a aplicarse a las rutas de los routers. Por eso cada endpoint lleva su `@limiter.limit` explícito, y los tests de `tests/test_rate_limit_cors.py` comprueban cada nivel.
 
@@ -351,7 +359,7 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
   - Cada vez que cambia `main` y pasan los tests, el trabajo `deploy-render` del CI llama al *deploy hook* de Render, que construye la imagen con el mismo `Dockerfile` y la publica. Producción nunca se despliega desde `develop` ni desde una rama `features/`.
   - Si falta el secreto `RENDER_DEPLOY_HOOK_URL`, el trabajo termina en verde pero **no despliega** (deja un aviso en el CI). Conviene revisar ese aviso después de cada release: hasta la v1.0.3, producción no se actualizaba por esto.
   - El *Auto-Deploy* de Render está apagado: si no, desplegaría cada commit de `main` aunque los tests fallaran. Así, lo que llega a producción siempre ha pasado por revisión y por el CI.
-  - La URL del hook está en el secreto `RENDER_DEPLOY_HOOK_URL` (quien la tenga puede lanzar despliegues). `SECRET_KEY` la generó Render y solo está en su panel, junto con `PORT=8000` y `TRUSTED_PROXY_HOPS=1`. Ninguna está en el código. Para comprobar que `TRUSTED_PROXY_HOPS` está bien, en los logs de Render cada petición debe mostrar `ip=` con la IP pública de quien la hace, no una IP interna del proxy.
+  - La URL del hook está en el secreto `RENDER_DEPLOY_HOOK_URL` (quien la tenga puede lanzar despliegues). `SECRET_KEY` la generó Render y solo está en su panel, junto con `PORT=8000` y `TRUSTED_PROXY_HOPS=3` (ver *Rate limiting → ¿Qué IP se usa detrás de Render?*). Ninguna está en el código. Para comprobar que `TRUSTED_PROXY_HOPS` está bien, en los logs de Render cada petición debe mostrar `ip=` con la IP pública de quien la hace, no una IP interna del proxy.
   - Render comprueba `/health` antes de dar por bueno cada despliegue: si la nueva versión no arranca, sigue sirviendo la anterior.
   - Después, el CI espera a que Render sirva el commit nuevo y lanza la **prueba de humo** contra la URL pública (ver *Tests → Prueba de humo del despliegue*).
   - Se puede relanzar a mano desde *Actions → CI → Run workflow* sobre `main`.
