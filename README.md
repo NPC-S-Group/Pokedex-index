@@ -15,7 +15,7 @@ Stack: FastAPI, SQLModel (SQLite por defecto), JWT con `python-jose`, `bcrypt`, 
 | Miembro | Usuario Git | Partes desarrolladas |
 |---|---|---|
 | Jorge Aranda | [@jorgearanda179](https://github.com/jorgearanda179) | Organización, repo, tablero y CI (GitHub Actions + Docker); estructura base; fixtures comunes de tests; equipos de batalla y su export en PDF; rate limiting y CORS; documentación |
-| Miguel Pina | [@miguelpina671-cmd](https://github.com/miguelpina671-cmd) | Autenticación (`/auth/me`, refresh tokens y logout) y sus tests; tests del CRUD de la Pokédex y fix de `capture_date`; export de la Pokédex en CSV/PDF; API v2 de ejemplo |
+| Miguel Pina | [@miguelpina671-cmd](https://github.com/miguelpina671-cmd) | Autenticación (`/auth/me`, refresh tokens con rotación y logout, login sin pistas también en el tiempo de respuesta) y sus tests; tests del CRUD de la Pokédex y fix de `capture_date`; export de la Pokédex en CSV/PDF; API v2 de ejemplo y estrategia de deprecación de la v1; despliegue en Render y prueba de humo del despliegue |
 | Henar Oliva | [@henarolivaperez-lang](https://github.com/henarolivaperez-lang) | Cliente de PokeAPI (errores, timeouts y logging); middleware de logging; búsqueda, detalle y ficha en PDF; estadísticas ampliadas |
 
 ## Instalación
@@ -38,7 +38,7 @@ Copia `.env.example` como `.env` y rellena los valores:
 | `POKEAPI_TIMEOUT` | Opcional. Segundos de espera a la PokeAPI antes de responder 504 (por defecto 5) |
 | `LOG_LEVEL` | Opcional. Nivel de log: `DEBUG`, `INFO`, `WARNING` o `ERROR` (por defecto `INFO`) |
 | `LOG_FILE` | Opcional. Archivo de log además de la consola (por defecto `pokedex_api.log`; vacío = solo consola) |
-| `TRUSTED_PROXY_HOPS` | Opcional. Cuántos proxies hay delante de la API (por defecto `0`, en local y en el homelab). En Render, `1`: así el límite de peticiones y los logs usan la IP real de cada usuario y no la del proxy. `TRUST_PROXY=true` es un atajo que equivale a `1` |
+| `TRUSTED_PROXY_HOPS` | Opcional. Cuántos proxies hay delante de la API (por defecto `0`, en local y en el homelab). En Render, **`3`** (Cloudflare y dos proxies de Render, comprobado en sus logs): así el límite de peticiones y los logs usan la IP real de cada usuario y no la de un proxy. `TRUST_PROXY=true` es un atajo que equivale a `1`, que en Render **no basta** |
 
 ## Ejecución
 **En local** (con el `.env` configurado):
@@ -67,6 +67,7 @@ python scripts/prueba_humo.py http://localhost:8000   # contra la API en local
 
 **¿Para qué sirve?** Recorre la API **ya publicada** como lo haría un usuario real y comprueba unas 50 cosas:
 - registro y login;
+- refresh tokens: renovar, rotación, que no sirven para entrar y logout;
 - búsqueda, detalle y ficha con la PokeAPI real;
 - la Pokédex con sus filtros, estadísticas y exportación a CSV y PDF;
 - la v2 y los equipos;
@@ -97,7 +98,7 @@ Todos bajo `/api/v1` salvo `/health` y la v2 de ejemplo (`/api/v2`, ver *Version
 | Método | Ruta | Qué hace | Límite |
 |---|---|---|---|
 | POST | `/auth/register` | Registro (contraseña con mayúscula y número, mínimo 8) | 5/hora |
-| POST | `/auth/login` | Login (formulario OAuth2); devuelve el access token (24 h) y el refresh token (7 días) | 10/min |
+| POST | `/auth/login` | Login (formulario OAuth2); devuelve el access token (30 min) y el refresh token (7 días) | 10/min |
 | POST | `/auth/refresh` | Cambia un refresh token por un par nuevo; el usado deja de valer | 10/min |
 | POST | `/auth/logout` | Anula el refresh token (responde siempre 204) | 10/min |
 | GET 🔒 | `/auth/me` | Usuario actual | 100/min |
@@ -141,7 +142,15 @@ Cada endpoint tiene su límite (`app/limits.py`), contado por IP con `slowapi`:
 
 **¿Por qué además un límite por cuenta en el login?** El límite por IP se salta cambiando de IP (una VPN, muchos ordenadores). Tras 5 contraseñas incorrectas en 15 minutos, esa cuenta deja de aceptar logins durante un rato (`429` con `Retry-After: 900`), venga de donde venga. Un login correcto pone el contador a cero, y otras cuentas no se ven afectadas.
 
-**¿Qué IP se usa detrás de Render?** En Render las peticiones llegan a través de su proxy, así que la conexión viene siempre de la misma IP interna: todos los usuarios compartían el contador, y 10 logins fallidos de una persona bloqueaban el login de todos. Con `TRUSTED_PROXY_HOPS=1`, la IP se saca de la cabecera `X-Forwarded-For` empezando **por la derecha** (la entrada que añade Render), porque la parte izquierda la escribe el cliente y podría inventársela para saltarse el límite.
+**¿Qué IP se usa detrás de Render?** En Render las peticiones llegan a través de su proxy, así que la conexión viene siempre de la misma IP interna: todos los usuarios compartían el contador, y 10 logins fallidos de una persona bloqueaban el login de todos. Con `TRUSTED_PROXY_HOPS`, la IP se saca de la cabecera `X-Forwarded-For` contando **desde la derecha** (las entradas que añaden los proxies), porque la parte izquierda la escribe el cliente y podría inventársela para saltarse el límite. En Render hacen falta **3** saltos, y lo comprobamos el 16-11 en sus logs con peticiones marcadas:
+
+| Valor | IP que salía en los logs |
+|---|---|
+| `1` (o `TRUST_PROXY=true`) | Una IP interna de Render (`10.x.x.x`), la misma para todos |
+| `2` | Una IP de Cloudflare (`162.158.x.x`), compartida por muchos usuarios |
+| **`3`** | **La IP pública real del cliente** |
+
+Con `3`, una petición con un `X-Forwarded-For` inventado (una IP o dos) sigue registrando la IP real: no se puede falsear.
 
 > Nota técnica: no usamos `default_limits` de slowapi porque, con la versión de FastAPI del proyecto, no llega a aplicarse a las rutas de los routers. Por eso cada endpoint lleva su `@limiter.limit` explícito, y los tests de `tests/test_rate_limit_cors.py` comprueban cada nivel.
 
@@ -231,17 +240,17 @@ Registro con `POST /auth/register`, login con `POST /auth/login` (formulario OAu
 
 | Paso | Qué hace la API |
 |---|---|
-| Registro | Valida usuario (3 a 50 caracteres: letras, números y `_ . -`), email y contraseña (mínimo 8, con una mayúscula y un número). Guarda solo el hash `bcrypt` y responde `201` con el usuario, nunca con la contraseña |
+| Registro | Valida usuario (3 a 50 caracteres: letras, números y `_ . -`), email y contraseña (mínimo 8, con una mayúscula y un número, y como mucho 72 bytes, el máximo que usa bcrypt). Guarda solo el hash `bcrypt` y responde `201` con el usuario, nunca con la contraseña |
 | Login | Comprueba la contraseña con `bcrypt` y devuelve `{"access_token", "refresh_token", "token_type": "bearer"}` |
 | Renovar (`/auth/refresh`) | Recibe `{"refresh_token"}` y devuelve un par nuevo. El refresh token usado queda anulado |
 | Cerrar sesión (`/auth/logout`) | Recibe `{"refresh_token"}` y lo anula |
+| Cada petición protegida | Lee el token, comprueba la firma y la caducidad y busca al usuario por el `user_id` del token |
 
 **Mayúsculas:** los correos no distinguen mayúsculas, así que el email se guarda en minúsculas y sin espacios (`  Ash@X.com ` → `ash@x.com`). El usuario se guarda tal y como se escribió (`Ash`), pero se compara sin mayúsculas: `ash` y `ASH` no se pueden registrar si ya existe `Ash`, y los tres entran en la misma cuenta. Lo garantiza también un índice único sobre `lower(username)` en la base de datos.
-| Cada petición protegida | Lee el token, comprueba la firma y la caducidad y busca al usuario por el `user_id` del token |
 
 **¿Qué lleva el token?** `sub` (nombre de usuario), `user_id`, `type`, `iat` y `exp`. El access token (`type: "access"`) caduca a los **30 minutos** (`access_token_expire_minutes`); para seguir conectado se usa el refresh token (7 días). Con el token se busca al usuario por su `user_id` (la clave primaria), no por el nombre.
 
-**¿Para qué sirve el refresh token?** Para no tener que escribir la contraseña cada día. El access token va en cada petición, así que, si alguien lo roba, puede usarlo; por eso dura poco (24 h). El refresh token (`type: "refresh"`, 7 días, `refresh_token_expire_days`) solo se envía a `/auth/refresh` para pedir un par nuevo. Así, una sesión dura hasta 7 días desde el último uso sin volver a dar la contraseña.
+**¿Para qué sirve el refresh token?** Para no tener que escribir la contraseña cada día. El access token va en cada petición, así que, si alguien lo roba, puede usarlo; por eso dura poco (30 minutos). El refresh token (`type: "refresh"`, 7 días, `refresh_token_expire_days`) solo se envía a `/auth/refresh` para pedir un par nuevo. Así, una sesión dura hasta 7 días desde el último uso sin volver a dar la contraseña.
 
 | Medida | Por qué |
 |---|---|
@@ -254,7 +263,9 @@ Registro con `POST /auth/register`, login con `POST /auth/login` (formulario OAu
 
 **¿Y el access token tras el logout?** Sigue valiendo hasta que caduca (máximo 30 minutos; antes eran 24 h y en una demo parecía un fallo), porque se comprueba sin consultar la base de datos. El cliente debe borrarlo al cerrar sesión. Anularlo al momento exigiría consultar una lista de bloqueo en cada petición (ver *Mejoras futuras*). Los tokens emitidos antes de esta mejora, que no llevan `type`, se tratan como access tokens hasta que caducan.
 
-**¿Qué responde un login fallido?** Siempre lo mismo, falle lo que falle: `401` con `{"detail": "Usuario o contraseña incorrectos"}` y la cabecera `WWW-Authenticate: Bearer`. Ni el código, ni el mensaje, ni las cabeceras, ni el tiempo de respuesta dicen si el error está en el usuario, en la contraseña o en que la cuenta está desactivada (ver *Decisiones de Seguridad*).
+**¿Qué responde un login fallido?** Siempre lo mismo, falle lo que falle: `401` con `{"detail": "Usuario o contraseña incorrectos"}` y la cabecera `WWW-Authenticate: Bearer`. Ni el código, ni el mensaje, ni las cabeceras, ni el tiempo de respuesta dicen si el error está en el usuario, en la contraseña, en que la cuenta está desactivada o en que la contraseña pasa de 72 bytes (ver *Decisiones de Seguridad*).
+
+**¿Y si alguien prueba muchas contraseñas?** Tras **5 fallos en 15 minutos** con el mismo nombre de usuario, el login responde `429` («Demasiados intentos fallidos para esta cuenta») durante 15 minutos, venga de la IP que venga (ver *Rate limiting*). El contador cuenta también los nombres que no existen, así que el `429` tampoco delata qué cuentas hay. Un login correcto pone el contador a cero.
 
 **¿Cuándo da 401?** Sin token, con un token inventado, firmado con otra clave, caducado o sin `user_id`, y también si el usuario ya no existe o está desactivado (`is_active = False`). Si llega un token y falla cualquiera de estas comprobaciones, la respuesta es siempre la misma, `Credenciales no válidas`: quien prueba tokens no sabe cuál ha fallado.
 
@@ -345,9 +356,10 @@ Ramas `features/<nombre>` desde `develop`, integradas por pull request revisado 
   - La base de datos y el log viven en un volumen Docker (`pokedex-data`), así que sobreviven a cada despliegue.
   - Se puede relanzar a mano desde *Actions → CI → Run workflow* sobre `main`.
 - **Despliegue público (Render):** <https://pokedex-api-wrok.onrender.com/docs>
-  - Cada vez que cambia `main` y pasan los tests, el trabajo `deploy-render` del CI llama al *deploy hook* de Render, que construye la imagen con el mismo `Dockerfile` y la publica. Nunca se despliega desde `develop` ni desde una rama `features/`.
+  - Cada vez que cambia `main` y pasan los tests, el trabajo `deploy-render` del CI llama al *deploy hook* de Render, que construye la imagen con el mismo `Dockerfile` y la publica. Producción nunca se despliega desde `develop` ni desde una rama `features/`.
+  - Si falta el secreto `RENDER_DEPLOY_HOOK_URL`, el trabajo termina en verde pero **no despliega** (deja un aviso en el CI). Conviene revisar ese aviso después de cada release: hasta la v1.0.3, producción no se actualizaba por esto.
   - El *Auto-Deploy* de Render está apagado: si no, desplegaría cada commit de `main` aunque los tests fallaran. Así, lo que llega a producción siempre ha pasado por revisión y por el CI.
-  - La URL del hook está en el secreto `RENDER_DEPLOY_HOOK_URL` (quien la tenga puede lanzar despliegues). `SECRET_KEY` la generó Render y solo está en su panel, junto con `PORT=8000` y `TRUSTED_PROXY_HOPS=1`. Ninguna está en el código. Para comprobar que `TRUSTED_PROXY_HOPS` está bien, en los logs de Render cada petición debe mostrar `ip=` con la IP pública de quien la hace, no una IP interna del proxy.
+  - La URL del hook está en el secreto `RENDER_DEPLOY_HOOK_URL` (quien la tenga puede lanzar despliegues). `SECRET_KEY` la generó Render y solo está en su panel, junto con `PORT=8000` y `TRUSTED_PROXY_HOPS=3` (ver *Rate limiting → ¿Qué IP se usa detrás de Render?*). Ninguna está en el código. Para comprobar que `TRUSTED_PROXY_HOPS` está bien, en los logs de Render cada petición debe mostrar `ip=` con la IP pública de quien la hace, no una IP interna del proxy.
   - Render comprueba `/health` antes de dar por bueno cada despliegue: si la nueva versión no arranca, sigue sirviendo la anterior.
   - Después, el CI espera a que Render sirva el commit nuevo y lanza la **prueba de humo** contra la URL pública (ver *Tests → Prueba de humo del despliegue*).
   - Se puede relanzar a mano desde *Actions → CI → Run workflow* sobre `main`.
