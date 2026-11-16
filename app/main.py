@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Pokédex API",
-    version="1.0.3",
+    version="1.0.4",
     description=(
         "API REST del Pokédex personal · Práctica 1 de Sistemas de Información (UFV).\n\n"
         "Busca Pokémon en la PokeAPI, guarda los tuyos en tu Pokédex y monta equipos "
