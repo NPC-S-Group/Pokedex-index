@@ -14,7 +14,11 @@ router = APIRouter(prefix="/pokemon", tags=["pokemon"])
 
 
 # /search va ANTES que /{id_or_name}: si no, FastAPI leería "search" como un nombre.
-@router.get("/search", response_model=PokemonSearchPage)
+@router.get(
+    "/search",
+    summary="Buscar Pokémon por nombre y/o tipo",
+    response_model=PokemonSearchPage,
+)
 @limiter.limit(LIMITE_POKEAPI)
 async def buscar_pokemon(
     request: Request,
@@ -55,7 +59,11 @@ async def buscar_pokemon(
     )
 
 
-@router.get("/{id_or_name}", response_model=PokemonDetail)
+@router.get(
+    "/{id_or_name}",
+    summary="Ver el detalle de un Pokémon",
+    response_model=PokemonDetail,
+)
 @limiter.limit(LIMITE_POKEAPI)
 async def consultar_pokemon(
     request: Request, id_or_name: str, usuario: CurrentUser, poke: ServicioPokeAPI
@@ -66,6 +74,7 @@ async def consultar_pokemon(
 
 @router.get(
     "/{id_or_name}/card",
+    summary="Descargar la ficha de un Pokémon en PDF",
     response_class=Response,
     responses={
         200: {"content": {"application/pdf": {}}, "description": "Ficha en PDF"}

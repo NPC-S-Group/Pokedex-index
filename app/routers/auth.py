@@ -49,7 +49,11 @@ LOGIN_INCORRECTO = "Usuario o contraseña incorrectos"
 _HASH_FALSO = hash_password("usuario-que-no-existe-" + "x" * 16)
 
 
-@router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    summary="Registrarse",
+    response_model=UserRead, status_code=status.HTTP_201_CREATED,
+)
 @limiter.limit(LIMITE_REGISTRO)
 def registrar(request: Request, datos: UserCreate, session: SessionDep):
     repetido = session.exec(
@@ -135,7 +139,11 @@ def _payload_refresh(token: str) -> dict | None:
     return payload
 
 
-@router.post("/login", response_model=TokenPair)
+@router.post(
+    "/login",
+    summary="Iniciar sesión (devuelve el access token y el refresh token)",
+    response_model=TokenPair,
+)
 @limiter.limit(LIMITE_LOGIN)
 def login(
     request: Request,
@@ -175,7 +183,11 @@ def login(
     return _emitir_par(session, usuario)
 
 
-@router.post("/refresh", response_model=TokenPair)
+@router.post(
+    "/refresh",
+    summary="Renovar la sesión con el refresh token",
+    response_model=TokenPair,
+)
 @limiter.limit(LIMITE_LOGIN)
 def refrescar(request: Request, datos: RefreshRequest, session: SessionDep):
     """Cambia un refresh token por un par nuevo. El usado deja de valer (rotación)."""
@@ -213,7 +225,11 @@ def refrescar(request: Request, datos: RefreshRequest, session: SessionDep):
     return _emitir_par(session, usuario)
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/logout",
+    summary="Cerrar sesión (anula el refresh token)",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 @limiter.limit(LIMITE_LOGIN)
 def logout(request: Request, datos: RefreshRequest, session: SessionDep):
     """Anula el refresh token. Responde 204 siempre, sea válido o no: así no sirve
@@ -227,7 +243,7 @@ def logout(request: Request, datos: RefreshRequest, session: SessionDep):
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/me", response_model=UserRead)
+@router.get("/me", summary="Ver mi usuario", response_model=UserRead)
 @limiter.limit(LIMITE_AUTENTICADO)
 def usuario_actual(request: Request, usuario: CurrentUser):
     """Devuelve el usuario dueño del token (sin la contraseña, por UserRead)."""
